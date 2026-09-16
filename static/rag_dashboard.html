@@ -1,0 +1,3449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RAG Knowledge Assistant — Liquid Metal</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  :root{
+    --blur: 0px;
+    --frost: 0;
+    --saturation: 1.0;
+    --tint: rgba(51,33,80,0.50);
+    --bevel: 20px;
+    --specular: 1;
+    --depth: 150px;
+    --radius: 60px;
+    --contrast: 1.60;
+    --brightness: 1.40;
+    --white-text: #ffffff;
+    --response-text: #ffffff;
+    --config-bg-opacity: 0.85;
+    --config-tint-opacity: 0.15;
+    --config-tint-color: 51, 33, 80;
+    --main-bg-image: url('/static/bg/main.jpg');
+    --config-bg-image: url('/static/bg/panel-1.jpg');
+    --config-label-color: 205, 127, 50;
+    --config-label-light: 244, 164, 96;
+    --config-label-dark: 139, 69, 19;
+  }
+
+  *{ box-sizing: border-box; font-family: 'Inter', sans-serif; }
+
+
+
+  .page{
+    display:flex;
+    gap: 28px;
+    padding: 20px;
+    align-items: flex-start;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+
+  .main-col{
+    flex: 1 1 auto;
+    min-width: 0;
+    display:flex;
+    flex-direction: column;
+    gap: 24px;
+    padding-bottom: 420px;   /* was 360, added room for fixed input bar */
+  }
+
+  h1.page-title{
+    font-size: 36px;
+    font-weight: 900;
+    margin: 4px 0 0 4px;
+    letter-spacing: 1px;
+    opacity: 1 !important;
+    background: linear-gradient(180deg, #ffffff 0%, #e8eaee 15%, #b8bcc4 32%, #8a8f98 45%, #d8dbe0 55%, #6e727a 68%, #c4c8cf 82%, #9a9ea6 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow:
+      0 1px 0 #f4c008ca,
+      0 2px 0 #6a6a74,
+      0 3px 0 #5a5a64,
+      0 4px 0 #4a4a54,
+      0 5px 0 #3a3a44,
+      0 6px 0 #2a2a34,
+      0 8px 10px rgba(0,0,0,0.55),
+      0 10px 18px rgba(0,0,0,0.45);
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+  }
+
+  .metallic-orange{
+    background: linear-gradient(180deg, #ffd700 0%, #e6b800 40%, #b38f00 60%, #ffd700 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+  }
+
+  .glass-panel{
+    position: relative;
+    background: rgba(255,255,255,0.02);
+    border-radius: var(--radius);
+    overflow: hidden;
+    backdrop-filter: blur(var(--blur)) saturate(var(--saturation)) contrast(var(--contrast)) brightness(var(--brightness));
+    -webkit-backdrop-filter: blur(var(--blur)) saturate(var(--saturation)) contrast(var(--contrast)) brightness(var(--brightness));
+    box-shadow:
+      0 calc(var(--depth) * 0.25) calc(var(--depth) * 0.75) rgba(0,0,0,0.6),
+      0 calc(var(--depth) * 0.08) calc(var(--depth) * 0.3) rgba(0,0,0,0.4),
+      inset var(--bevel) var(--bevel) calc(var(--bevel) * 3) rgba(255,255,255, calc(var(--specular) * 0.65)),
+      inset calc(var(--bevel) * -1) calc(var(--bevel) * -1) calc(var(--bevel) * 3) rgba(0,0,0,0.3),
+      inset 0 0 calc(var(--bevel) * 8) rgba(255,255,255, calc(var(--specular) * 0.1));
+    padding: 26px;
+  }
+
+  .glass-panel::before{
+    content:"";
+    position:absolute; inset:0;
+    background: var(--tint);
+    z-index:0;
+    pointer-events:none;
+  }
+  .glass-panel::after{
+    content:"";
+    position:absolute; inset:0;
+    background: rgba(255,255,255, var(--frost));
+    z-index:0;
+    pointer-events:none;
+  }
+  .glass-panel > *{ position:relative; z-index:1; }
+
+  .glass-panel h2{
+    margin:0 0 16px 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--white-text);
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+  }
+
+  .drop-zone{
+    border: 1.5px dashed rgba(255,255,255,0.35);
+    border-radius: 18px;
+    padding: 28px;
+    text-align:center;
+    font-size: 14px;
+    opacity: 0.9;
+    cursor:pointer;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    /* [FIX] Lock drop-zone text to white — NOT affected by the color swatch. */
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+  }
+  .drop-zone:hover{
+    border-color: #a78bfa;
+    background: rgba(255,255,255,0.08);
+  }
+  .row{ display:flex; gap:12px; margin-top:14px; flex-wrap:wrap; }
+  textarea, input[type="text"]{
+    width:100%;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: rgba(255,255,255,0.06);
+    color: var(--white-text);
+    padding: 12px 14px;
+    font-size: 14px;
+    resize: vertical;
+    font-family: inherit;
+  }
+  button.action{
+    background: linear-gradient(90deg, rgba(192,192,192,0.3) 0%, rgba(248,248,248,0.5) 20%, rgba(128,128,128,0.3) 40%, rgba(240,240,240,0.5) 60%, rgba(112,112,112,0.3) 80%, rgba(192,192,192,0.4) 100%), rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #ffffff;
+    padding: 10px 18px;
+    border-radius: 999px;
+    cursor:pointer;
+    font-size:14px;
+    font-weight:700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+    transition: background .15s ease, transform .1s ease;
+  }
+  button.action:hover{ transform: scale(1.02); box-shadow: 0 6px 16px rgba(0,0,0,0.3); }
+  button.action:active{ transform: scale(0.97); }
+
+  .result-item{
+    border-radius: 14px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.15);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    font-size: 14px;
+    line-height:1.5;
+    /* [FIX] Follow the text-color swatch (welcome message, chat cleared message) */
+    color: var(--white-text, #ffffff);
+    -webkit-text-fill-color: var(--white-text, #ffffff);
+  }
+  .result-item .src{
+    font-size:12px;
+    opacity:0.7;
+    margin-top:6px;
+  }
+
+  .file-chip{
+    display:inline-flex; align-items:center; gap:8px;
+    background: rgba(255,255,255,0.08);
+    border:1px solid rgba(255,255,255,0.2);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size:13px;
+    margin: 4px 6px 0 0;
+  }
+
+  /* ====== CONFIG PANEL ====== */
+  .config-panel{
+    position: sticky;
+    top: 20px;
+    height: calc(100vh - 40px);
+    width: 320px;
+    flex: 0 0 320px;
+    border-radius: 28px;
+    overflow: hidden;
+  }
+  .config-bg-layer{
+    position:absolute; inset:0;
+    background-image: var(--config-bg-image);
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: var(--config-bg-opacity);
+    z-index:0;
+  }
+  .config-tint-layer{
+    position:absolute; inset:0;
+    background: rgba(var(--config-tint-color), var(--config-tint-opacity));
+    z-index:1;
+  }
+  .config-content{
+    position:relative;
+    z-index:2;
+    height:100%;
+    display:flex;
+    flex-direction:column;
+    padding: 24px 20px;
+    overflow-y:auto;
+    color:#ffffff !important;
+    opacity: 1 !important;
+  }
+  .config-content *{ opacity:1 !important; }
+
+  .config-title-wrap{
+    display:flex;
+    align-items:center;
+    gap: 12px;
+    margin-top: -22px;
+    margin-bottom: 22px;
+    justify-content: flex-start;
+  }
+  .gear-icon{
+    font-size: 24px;
+    line-height: 1;
+    filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.8));
+    background: linear-gradient(180deg, #f4f4f6 0%, #cfd2d8 22%, #8b8f97 46%, #d9dce1 55%, #55575d 70%, #eceef1 85%, #6b6e74 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+  }
+  .chrome-title{
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    margin:0;
+    background: linear-gradient(180deg, #f4f4f6 0%, #cfd2d8 22%, #8b8f97 46%, #d9dce1 55%, #55575d 70%, #eceef1 85%, #6b6e74 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow:
+      0 1px 0 #bfad36,
+      0 2px 0 #6a6a74,
+      0 3px 0 #5a5a64,
+      0 4px 0 #4a4a54,
+      0 5px 0 #3a3a44,
+      0 6px 0 #2a2a34,
+      0 8px 10px rgba(0,0,0,0.55),
+      0 10px 18px rgba(0,0,0,0.45);
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+    position: relative;
+  }
+  .chrome-title::after{
+    content: attr(data-text);
+    position:absolute; left:0; top:0;
+    background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.9) 48%, transparent 62%);
+    -webkit-background-clip: text; background-clip:text; color:transparent; -webkit-text-fill-color:transparent;
+    opacity: 0;
+    pointer-events:none;
+  }
+
+  .cfg-section{ margin-bottom: 22px; }
+  .cfg-section h3{
+    font-size: 14px;
+    font-weight:700;
+    margin: 0 0 10px 0;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    opacity:1;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+  }
+  .cfg-field{ margin-bottom: 14px; }
+
+  /* ====== METALLIC SILVER 3D LABELS ====== */
+.cfg-field label{
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 16px;
+    font-weight: 0;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+
+    /* ===== CHROME SILVER GRADIENT (matches Configuration title) ===== */
+    background: linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f4f4f6 15%,
+      #cfd2d8 28%,
+      #8b8f97 42%,
+      #d9dce1 50%,
+      #55575d 60%,
+      #eceef1 76%,
+      #ffffff 88%,
+      #6b6e74 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+
+    /* ===== 3D EXTRUSION (dark silver, straight down) ===== */
+    text-shadow:
+      0 1px 0 #f4c008ca,
+      0 2px 0 #6a6a74,
+      0 3px 0 #5a5a64,
+      0 4px 0 #4a4a54,
+      0 5px 0 #3a3a44,
+      0 6px 0 #2a2a34,
+      0 8px 10px rgba(0,0,0,0.55),
+      0 10px 18px rgba(0,0,0,0.45);
+
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+}
+
+  .val-red{
+    color: #ff3b3b !important;
+    -webkit-text-fill-color: #ff3b3b !important;
+    text-shadow: 0 0 8px rgba(255,59,59,0.6), 0 1px 2px rgba(0,0,0,0.8);
+    font-weight: 900;
+    font-size: 14px;
+    white-space: nowrap;
+    background: none;
+  }
+  .val-gold{
+    color: #ffd700 !important;
+    -webkit-text-fill-color: #ffd700 !important;
+    text-shadow: 0 0 8px rgba(255,215,0,0.6), 0 1px 2px rgba(0,0,0,0.8);
+    font-weight: 900;
+    font-size: 14px;
+    white-space: nowrap;
+    background: none;
+  }
+  .val-cyan{
+    color: #00e5ff !important;
+    -webkit-text-fill-color: #00e5ff !important;
+    text-shadow: 0 0 8px rgba(0,229,255,0.6), 0 1px 2px rgba(0,0,0,0.8);
+    font-weight: 900;
+    font-size: 14px;
+    white-space: nowrap;
+    background: none;
+  }
+
+  select.cfg-select{
+    width:100%;
+    background:
+      linear-gradient(90deg, rgba(192,192,192,0.3) 0%, rgba(248,248,248,0.5) 20%, rgba(128,128,128,0.3) 40%, rgba(240,240,240,0.5) 60%, rgba(112,112,112,0.3) 80%, rgba(192,192,192,0.4) 100%),
+      rgba(0,0,0,1);
+    border:1px solid rgba(255,255,255,0.4);
+    color:#efffa0;
+    border-radius:10px;
+    padding:8px 10px;
+    font-size:13px;
+    font-weight:700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), inset 0 -1px 0 rgba(0,0,0,0.3), 0 4px 12px rgba(0,0,0,0.2);
+    cursor:pointer;
+  }
+  select.cfg-select option{ color:#111; }
+
+  input[type="range"]{
+    -webkit-appearance:none;
+    width:100%;
+    height: 4px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(192,192,192,0.4) 0%, rgba(248,248,248,0.6) 20%, rgba(128,128,128,0.4) 40%, rgba(240,240,240,0.6) 60%, rgba(112,112,112,0.4) 80%, rgba(192,192,192,0.5) 100%);
+    outline:none;
+    border: 1px solid rgba(255,255,255,0.3);
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.3);
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:16px; height:16px;
+    border-radius:50%;
+    background: radial-gradient(circle at 30% 30%, #808080, #404040);
+    border: 2px solid #c0c0c0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
+    cursor:pointer;
+    margin-top:-6px;
+  }
+  input[type="range"]::-moz-range-thumb{
+    width:16px; height:16px;
+    border-radius:50%;
+    background: radial-gradient(circle at 30% 30%, #808080, #404040);
+    border: 2px solid #c0c0c0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.4);
+    cursor:pointer;
+  }
+
+  input[type="color"]{
+    -webkit-appearance:none;
+    border:none;
+    width:36px; height:26px;
+    border-radius:6px;
+    background:none;
+    cursor:pointer;
+    padding:0;
+  }
+
+  .cfg-footer{
+    margin-top:auto;
+    font-size:11px;
+    opacity:1;
+    color:#ffffff;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255,255,255,0.35);
+  }
+
+  .bg-settings{
+    position: fixed;
+    top: 18px;
+    right: 18px;
+    z-index: 500;
+    background: rgba(20,16,30,0.55);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 16px;
+    padding: 12px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    backdrop-filter: blur(10px);
+    font-size:12px;
+    max-width: 220px;
+  }
+  .bg-settings b{ font-size:12px; letter-spacing:.3px; }
+  .bg-settings label.upload-btn{
+    display:flex; align-items:center; justify-content:center;
+    background: rgba(255,255,255,0.14);
+    border:1px solid rgba(255,255,255,0.3);
+    border-radius: 999px;
+    padding: 7px 10px;
+    cursor:pointer;
+    font-size:12px;
+    font-weight:600;
+    text-align:center;
+  }
+  .bg-settings label.upload-btn:hover{ background: rgba(255,255,255,0.24); }
+  .bg-settings input[type="file"]{ display:none; }
+
+  .shader-toggle{
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 5999;
+    width: 46px; height:46px;
+    border-radius:50%;
+    background: rgba(30,24,44,0.85);
+    border:1px solid rgba(255,255,255,0.3);
+    color:#fff;
+    font-size:20px;
+    cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .shader-panel{
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 6000;
+    width: 340px;
+    max-height: calc(100vh - 36px);
+    overflow-y: auto;
+    background: rgba(18,14,26,0.88);
+    border: 1px solid rgba(255,255,255,0.22);
+    border-radius: 20px;
+    padding: 18px 18px 20px 18px;
+    backdrop-filter: blur(16px);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.6);
+    color:#fff;
+  }
+  .shader-panel.hidden{ display:none; }
+  .shader-head{
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom: 10px;
+  }
+  .shader-head h3{ margin:0; font-size:15px; font-weight:700; }
+  .shader-close{
+    background: rgba(255,255,255,0.1);
+    border:1px solid rgba(255,255,255,0.3);
+    color:#fff;
+    width:28px; height:28px;
+    border-radius:50%;
+    cursor:pointer;
+    font-size:14px;
+    line-height:1;
+  }
+  .shader-close:hover{ background: rgba(255,255,255,0.22); }
+
+  .sh-field{ margin-bottom: 12px; }
+  .sh-field label{
+    display:flex; justify-content:space-between;
+    font-size:12px; font-weight:600;
+    margin-bottom:5px;
+    opacity:0.9;
+    background: none;
+    -webkit-text-fill-color: #fff;
+    color: #fff;
+    text-shadow: none;
+    filter: none;
+  }
+  .sh-field label .val{ font-weight:400; opacity:0.7; }
+  .sh-color-row{ display:flex; align-items:center; gap:10px; }
+  .sh-color-row input[type="range"]{ flex:1; }
+
+  .sh-divider{
+    border:none; border-top:1px solid rgba(255,255,255,0.15);
+    margin: 14px 0;
+  }
+  .swatches{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .swatch{
+    width:22px; height:22px; border-radius:50%;
+    border:2px solid rgba(255,255,255,0.5);
+    cursor:pointer;
+  }
+  .swatch.active{ border-color:#fff; box-shadow:0 0 0 2px rgba(255,255,255,0.4); }
+
+  @media (max-width: 900px){
+    .page{ flex-direction:column; }
+    .config-panel{
+      position: relative;
+      top:0; height: 420px; width:100%; flex-basis:auto;
+    }
+  }
+
+  
+
+  /* ====== CHAT BUBBLES ====== */
+  .chat-container{
+    display:flex; flex-direction:column; gap: 20px;
+    max-height: calc(100vh - 400px);   /* adapts to viewport, leaves room for fixed input */
+    min-height: 300px;
+    overflow-y: auto; padding: 10px 6px;
+    scroll-behavior: smooth; margin-bottom: 16px;
+  }
+  .chat-container::-webkit-scrollbar{ width: 6px; }
+  .chat-container::-webkit-scrollbar-track{ background: rgba(255,255,255,0.05); border-radius: 10px; }
+  .chat-container::-webkit-scrollbar-thumb{ background: rgba(255,255,255,0.2); border-radius: 10px; }
+
+  .chat-bubble{
+    max-width: 85%; padding: 16px 20px; border-radius: 24px;
+    font-size: 14px; line-height: 1.6; position: relative;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    animation: bubbleIn 0.35s cubic-bezier(.2,.9,.3,1.2);
+  }
+  @keyframes bubbleIn{
+    from{ opacity: 0; transform: translateY(10px) scale(0.97); }
+    to{ opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .chat-bubble.question{
+    align-self: flex-end;
+    background: linear-gradient(135deg, rgba(120, 80, 200, 0.40), rgba(80, 50, 160, 0.40));
+    border: 1px solid rgba(180, 150, 255, 0.5);
+    box-shadow: 0 8px 24px rgba(120, 80, 200, 0.35),
+      inset 2px 2px 4px rgba(255,255,255,0.35),
+      inset -2px -2px 4px rgba(0,0,0,0.25);
+    color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    border-bottom-right-radius: 6px;
+  }
+  .chat-bubble.answer{
+    align-self: flex-start;
+    position: relative;
+    background: linear-gradient(135deg, rgba(220, 220, 230, 0.22), rgba(150, 155, 170, 0.30));
+    border: 1px solid rgba(255,255,255,0.45);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.35),
+      inset 3px 3px 6px rgba(255,255,255,0.35),
+      inset -3px -3px 6px rgba(0,0,0,0.3),
+      inset 0 0 30px rgba(255,255,255,0.08);
+    color: #ffffff; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    border-bottom-left-radius: 6px;
+  }
+  .chat-bubble .bubble-header{
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    text-transform: uppercase; opacity: 0.7; margin-bottom: 8px; color: #ffffff;
+  }
+  .chat-bubble .bubble-content{ white-space: pre-wrap; word-wrap: break-word; }
+  .chat-bubble .bubble-time{ font-size: 10px; opacity: 0.6; margin-top: 10px; text-align: right; color: #ffffff; }
+
+  .sources-toggle{
+    display:inline-flex; align-items:center; gap: 6px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    margin-top: 10px; padding: 4px 10px; border-radius: 999px;
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: #ffffff; transition: background 0.2s;
+  }
+  .sources-toggle:hover{ background: rgba(255,255,255,0.22); }
+  .sources-list{ display: none; margin-top: 8px; font-size: 12px; opacity: 0.85; }
+  .sources-list.open{ display: block; }
+  .source-chip{
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; margin: 3px 4px 0 0; border-radius: 999px;
+    background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.2);
+    color: #ffffff; font-size: 11px;
+  }
+  .source-chip .source-idx{
+    background: rgba(255,255,255,0.2); border-radius: 50%;
+    width: 16px; height: 16px; display: inline-flex;
+    align-items: center; justify-content: center; font-size: 9px; font-weight: 700;
+  }
+
+  .card-header{
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 16px;
+  }
+  .card-header h2{ margin: 0 !important; }
+
+  .clear-btn{
+    background: linear-gradient(90deg, rgba(192,192,192,0.3) 0%, rgba(248,248,248,0.5) 20%, rgba(128,128,128,0.3) 40%, rgba(240,240,240,0.5) 60%, rgba(112,112,112,0.3) 80%, rgba(192,192,192,0.4) 100%), rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.5);
+    color: #ffffff; padding: 6px 14px; border-radius: 999px;
+    cursor: pointer; font-size: 12px; font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.25);
+    transition: transform 0.15s; white-space: nowrap;
+  }
+  .clear-btn:hover{ transform: scale(1.03); }
+
+  /* Fixed at viewport bottom — position/size computed by JS to align with chat card */
+  .chat-input-bar{
+    position: fixed;
+    bottom: 20px;
+    display: flex; gap: 10px; align-items: center;
+    padding: 8px 10px; border-radius: 999px;
+    background: linear-gradient(90deg, rgba(192,192,192,0.35) 0%, rgba(248,248,248,0.55) 20%, rgba(128,128,128,0.35) 40%, rgba(240,240,240,0.55) 60%, rgba(112,112,112,0.35) 80%, rgba(192,192,192,0.45) 100%), rgba(0,0,0,0.5);
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.75),
+      inset 0 -1px 0 rgba(0,0,0,0.35),
+      0 8px 32px rgba(0,0,0,0.45),
+      0 0 24px rgba(255,255,255,0.08);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    z-index: 5000;
+    /* Initial fallback (JS will override) */
+    left: 360px;
+    right: 20px;
+  }
+  .chat-input-bar input[type="text"]{
+    flex: 1; background: transparent; border: none; outline: none;
+    color: #ffffff; font-size: 14px; padding: 8px 14px;
+    font-family: inherit; text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+  .chat-input-bar input[type="text"]::placeholder{ color: rgba(255,255,255,0.55); }
+  .chat-input-bar .ask-send-btn{
+    background: linear-gradient(90deg, rgba(192,192,192,0.4) 0%, rgba(248,248,248,0.6) 20%, rgba(128,128,128,0.4) 40%, rgba(240,240,240,0.6) 60%, rgba(112,112,112,0.4) 80%, rgba(192,192,192,0.5) 100%), rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.6);
+    color: #ffffff; width: 40px; height: 40px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 700;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.3);
+    transition: transform 0.15s; flex-shrink: 0;
+  }
+  .chat-input-bar .ask-send-btn:hover{ transform: scale(1.08); }
+  .chat-input-bar .ask-send-btn:disabled{ opacity: 0.4; cursor: not-allowed; }
+
+  /* ====== VOICE INPUT BUTTON ====== */
+  .chat-input-bar .voice-btn{
+    background: linear-gradient(90deg, rgba(192,192,192,0.4) 0%, rgba(248,248,248,0.6) 20%, rgba(128,128,128,0.4) 40%, rgba(240,240,240,0.6) 60%, rgba(112,112,112,0.4) 80%, rgba(192,192,192,0.5) 100%), rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.6);
+    color: #ffffff; width: 40px; height: 40px; border-radius: 50%;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 2px 8px rgba(0,0,0,0.3);
+    transition: transform 0.15s, background 0.2s, box-shadow 0.2s;
+    flex-shrink: 0;
+    padding: 0;
+  }
+  .chat-input-bar .voice-btn:hover{ transform: scale(1.08); }
+  .chat-input-bar .voice-btn.listening{
+    background: linear-gradient(90deg, #dc2626 0%, #ef4444 50%, #b91c1c 100%);
+    border-color: rgba(255,120,120,0.9);
+    color: #ffffff;
+    animation: voicePulse 1.2s ease-in-out infinite;
+  }
+  @keyframes voicePulse{
+    0%, 100%{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 0 0 0 rgba(239,68,68,0.7); }
+    50%{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 0 0 12px rgba(239,68,68,0); }
+  }
+  .chat-input-bar .voice-btn:disabled{ opacity: 0.5; cursor: not-allowed; transform: none; }
+
+
+  /* ====== MODEL SELECTOR (Marquee Chrome Button) ====== */
+  .model-selector-wrap{
+    position: relative;
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+  .model-selector-wrap > label{
+    display: block;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    text-transform: uppercase;
+  }
+  .model-marquee-btn{
+    width: 100%;
+    background:
+      linear-gradient(90deg, rgba(192,192,192,0.3) 0%, rgba(248,248,248,0.5) 20%, rgba(128,128,128,0.3) 40%, rgba(240,240,240,0.5) 60%, rgba(112,112,112,0.3) 80%, rgba(192,192,192,0.4) 100%),
+      rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.5);
+    color: #000000;
+    border-radius: 999px;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(0,0,0,0.2), 0 4px 12px rgba(0,0,0,0.25);
+    cursor: pointer;
+    overflow: hidden;
+    position: relative;
+    text-align: left;
+    height: 40px;
+    display: flex;
+    align-items: center;
+  }
+  .model-marquee-track{
+    display: inline-block;
+    white-space: nowrap;
+    animation: marqueeScroll 12s linear infinite;
+    padding-left: 0;
+    will-change: transform;
+  }
+  @keyframes marqueeScroll{
+    0%{
+      transform: translateX(-100%);
+    }
+    100%{
+      transform: translateX(100%);
+    }
+  }
+  .model-marquee-btn:hover{
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(0,0,0,0.3), 0 6px 18px rgba(0,0,0,0.35);
+    transform: translateY(-1px);
+  }
+  .model-selector-wrap .model-options{
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: rgba(20,16,30,0.98);
+    border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 16px;
+    padding: 8px;
+    margin-top: 6px;
+    z-index: 100;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  }
+  .model-selector-wrap .model-options.open{
+    display: block;
+  }
+  .model-selector-wrap .model-options .opt{
+    padding: 10px 14px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: #ffffff;
+    letter-spacing: 0.5px;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .model-selector-wrap .model-options .opt:hover{
+    background: rgba(255,255,255,0.1);
+  }
+  .model-selector-wrap .model-options .opt.active{
+    background: linear-gradient(90deg, rgba(192,192,192,0.3) 0%, rgba(248,248,248,0.5) 50%, rgba(192,192,192,0.3) 100%);
+    color: #000000;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.6);
+  }
+
+
+  /* ====== BUBBLE ACTION BUTTONS (Copy + Regenerate) ====== */
+  .chat-bubble.answer .bubble-actions{
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    transition: opacity 0.25s ease;
+  }
+  .chat-bubble.answer:hover .bubble-actions{
+    opacity: 1;
+  }
+  .bubble-action-btn{
+    background: linear-gradient(90deg,
+      rgba(192,192,192,0.35) 0%,
+      rgba(248,248,248,0.55) 25%,
+      rgba(128,128,128,0.35) 50%,
+      rgba(240,240,240,0.55) 75%,
+      rgba(192,192,192,0.45) 100%);
+    border: 1px solid rgba(255,255,255,0.55);
+    color: #ffffff;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.7),
+      0 2px 6px rgba(0,0,0,0.3);
+    transition: transform 0.15s ease, background 0.2s ease;
+    padding: 0;
+    text-shadow: 0 1px 1px rgba(0,0,0,0.4);
+  }
+  .bubble-action-btn:hover{
+    transform: scale(1.12);
+    background: linear-gradient(90deg,
+      rgba(220,220,220,0.55) 0%,
+      rgba(255,255,255,0.75) 50%,
+      rgba(200,200,200,0.55) 100%);
+  }
+  .bubble-action-btn:active{
+    transform: scale(0.95);
+  }
+  .bubble-action-btn.copied{
+    background: linear-gradient(90deg, #4ade80, #22c55e) !important;
+    color: #052e16;
+    border-color: rgba(74,222,128,0.8);
+  }
+  .bubble-action-btn:disabled{
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .bubble-action-btn.speaking{
+    background: linear-gradient(90deg, #fbbf24, #f59e0b) !important;
+    color: #1a1f28 !important;
+    border-color: rgba(251,191,36,0.9) !important;
+    animation: speakPulse 1.4s ease-in-out infinite;
+  }
+  @keyframes speakPulse{
+    0%, 100%{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.3), 0 0 0 0 rgba(251,191,36,0.6); }
+    50%{ box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), 0 2px 6px rgba(0,0,0,0.3), 0 0 0 10px rgba(251,191,36,0); }
+  }
+
+
+  .retrieval-badge{
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(74,222,128,0.25), rgba(34,197,94,0.25));
+    border: 1px solid rgba(74,222,128,0.5);
+    color: #4ade80;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-left: 6px;
+    text-transform: uppercase;
+  }
+
+
+  /* ====== CONFIDENCE BADGE ====== */
+  .confidence-badge{
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    vertical-align: middle;
+  }
+  .confidence-badge.visible{
+    opacity: 1;
+  }
+  .confidence-badge.high{
+    background: linear-gradient(90deg, rgba(74,222,128,0.28), rgba(34,197,94,0.28));
+    border: 1px solid rgba(74,222,128,0.6);
+    color: #4ade80;
+    box-shadow: 0 0 12px rgba(74,222,128,0.35), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .confidence-badge.medium{
+    background: linear-gradient(90deg, rgba(234,179,8,0.28), rgba(202,138,4,0.28));
+    border: 1px solid rgba(234,179,8,0.6);
+    color: #fbbf24;
+    box-shadow: 0 0 12px rgba(234,179,8,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .confidence-badge.low{
+    background: linear-gradient(90deg, rgba(239,68,68,0.28), rgba(185,28,28,0.28));
+    border: 1px solid rgba(239,68,68,0.6);
+    color: #f87171;
+    box-shadow: 0 0 12px rgba(239,68,68,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+  }
+  .confidence-badge .cb-dot{
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 6px currentColor;
+  }
+
+
+  /* ====== SUGGESTED QUESTIONS (icon-triggered, hover reveal) ====== */
+  .suggest-toggle{
+    position: fixed;
+    bottom: 90px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg,
+        rgba(192,192,192,0.30) 0%,
+        rgba(248,248,248,0.50) 25%,
+        rgba(128,128,128,0.30) 50%,
+        rgba(240,240,240,0.50) 75%,
+        rgba(192,192,192,0.40) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: #1a1f28;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    cursor: pointer;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 4999;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    user-select: none;
+  }
+  .suggest-toggle:hover{
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 6px 18px rgba(0,0,0,0.4), 0 0 20px rgba(255, 220, 140, 0.25);
+  }
+  .suggest-toggle .icon{ font-size: 13px; }
+
+  .suggest-popup{
+    position: fixed;
+    bottom: 130px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    z-index: 4998;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    pointer-events: none;
+    max-width: 90vw;
+  }
+  .suggest-popup.visible{
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+  .suggest-chip{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 999px;
+    background:
+      linear-gradient(90deg,
+        rgba(192,192,192,0.30) 0%,
+        rgba(248,248,248,0.50) 25%,
+        rgba(128,128,128,0.30) 50%,
+        rgba(240,240,240,0.50) 75%,
+        rgba(192,192,192,0.40) 100%);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    color: #1a1f28;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+    white-space: nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .suggest-chip:hover{
+    transform: translateY(-1px) scale(1.03);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.4), 0 0 20px rgba(255, 220, 140, 0.25);
+  }
+  .suggest-chip:active{ transform: scale(0.97); }
+  .suggest-chip .chip-icon{ font-size: 11px; opacity: 0.7; }
+
+
+  /* ====== CONFIG BG CROSSFADE LAYER ====== */
+  .config-bg-layer,
+  .config-bg-layer-2{
+    position: absolute;
+    inset: 0;
+    background-size: 100% 100%;
+    background-position: center;
+    background-repeat: no-repeat;
+    opacity: 0;
+    z-index: 0;
+    transition: opacity 0.8s ease-in-out;
+  }
+  /* Layer 1 gets the main opacity from --config-bg-opacity */
+  .config-bg-layer.active,
+  .config-bg-layer-2.active{
+    opacity: var(--config-bg-opacity);
+  }
+  /* Legacy --config-bg-image style on layer 1 */
+  .config-bg-layer{
+    background-image: var(--config-bg-image);
+  }
+  .config-bg-layer-2{
+    background-image: var(--config-bg-image-2, none);
+  }
+
+
+  /* ====== AI RESPONSE TEXT COLOR (controlled by shader panel) ====== */
+  .chat-bubble.answer .bubble-content,
+  .chat-bubble.answer .bubble-content * {
+    color: var(--response-text, #ffffff) !important;
+    -webkit-text-fill-color: var(--response-text, #ffffff) !important;
+  }
+
+
+  /* ====== MAIN BG CYCLE LAYERS ====== */
+  #main-bg-layer-1,
+  #main-bg-layer-2{
+    position: fixed;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    z-index: 0;
+    opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+    pointer-events: none;
+  }
+  #main-bg-layer-1.active,
+  #main-bg-layer-2.active{
+    opacity: 1;
+  }
+  /* Body background is dark as fallback only */
+  html, body{
+    background: #0a0f1a;
+  }
+  /* Page content sits above BG layers */
+  .page{
+    position: relative;
+    z-index: 1;
+  }
+  /* Floating UI above BG */
+  .bg-settings,
+  .shader-toggle,
+  .shader-panel,
+  .chat-input-bar,
+  .suggest-toggle,
+  .suggest-popup{
+    z-index: 5000;
+  }
+
+
+  /* ====== AUTO BG TOGGLE (chrome pill) ====== */
+  .auto-bg-row{
+    display:flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 8px;
+    margin-bottom: 8px;
+  }
+  .auto-bg-label{
+    font-size: 14px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    background: linear-gradient(180deg,#ffffff 0%,#f4f4f6 15%,#cfd2d8 28%,#8b8f97 42%,#d9dce1 50%,#55575d 60%,#eceef1 76%,#ffffff 88%,#6b6e74 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 1px 0 rgba(244,192,8,0.8), 0 2px 0 #6a6a74, 0 3px 0 #5a5a64, 0 4px 0 #4a4a54, 0 6px 8px rgba(0,0,0,0.55);
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+  }
+  .auto-bg-toggle{
+    width: 46px; height: 24px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.6);
+    background: linear-gradient(180deg,#6b6e74 0%,#3a3a44 50%,#1e1e24 100%);
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+    transition: background 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.35), inset 0 -2px 4px rgba(0,0,0,0.5), 0 2px 6px rgba(0,0,0,0.5);
+  }
+  .auto-bg-toggle .auto-bg-knob{
+    position: absolute;
+    top: 1px; left: 1px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, #f4f4f6, #8b8f97 55%, #4a4a54 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 3px rgba(0,0,0,0.6);
+    transition: transform 0.25s cubic-bezier(.4,1.4,.6,1), background 0.25s ease;
+  }
+  .auto-bg-toggle[aria-pressed="true"]{
+    background: linear-gradient(180deg,#ffd700 0%,#c9a200 50%,#8b6f00 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), inset 0 -2px 4px rgba(0,0,0,0.5), 0 2px 10px rgba(255,215,0,0.4);
+  }
+  .auto-bg-toggle[aria-pressed="true"] .auto-bg-knob{
+    transform: translateX(22px);
+    background: radial-gradient(circle at 30% 30%, #ffffff, #f4c008 55%, #8b6f00 100%);
+  }
+
+  /* ====== BG NAVIGATION CONTROLS (in Config Panel) ====== */
+  .bg-nav-controls{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  .bg-nav-row{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    line-height: 1;
+  }
+  /* Chrome metallic silver label — fixed, not affected by text color */
+  .bg-nav-label{
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f4f4f6 15%,
+      #cfd2d8 28%,
+      #8b8f97 42%,
+      #d9dce1 50%,
+      #55575d 60%,
+      #eceef1 76%,
+      #ffffff 88%,
+      #6b6e74 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow:
+      0 1px 0 rgba(244, 192, 8, 0.8),
+      0 2px 0 #6a6a74,
+      0 3px 0 #5a5a64,
+      0 4px 0 #4a4a54,
+      0 6px 8px rgba(0,0,0,0.55);
+    filter: drop-shadow(0 2px 3px rgba(0,0,0,0.6));
+    min-width: 72px;
+  }
+  .bg-nav-count{
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    background: linear-gradient(
+      180deg,
+      #ffffff 0%,
+      #f4f4f6 15%,
+      #cfd2d8 28%,
+      #8b8f97 42%,
+      #d9dce1 50%,
+      #55575d 60%,
+      #eceef1 76%,
+      #ffffff 88%,
+      #6b6e74 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    -webkit-text-fill-color: transparent;
+    text-shadow:
+      0 1px 0 rgba(244, 192, 8, 0.8),
+      0 2px 0 #6a6a74,
+      0 3px 0 #5a5a64,
+      0 4px 0 #4a4a54,
+      0 5px 6px rgba(0,0,0,0.5);
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5));
+    min-width: 34px;
+    text-align: center;
+  }
+  /* Chrome pill buttons for < > */
+  .bg-nav-btn{
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.6);
+    background:
+      linear-gradient(180deg,
+        #ffffff 0%,
+        #e8ecf2 20%,
+        #8f96a3 55%,
+        #4a5260 80%,
+        #b8bfc9 100%);
+    color: #1a1f28;
+    font-size: 10px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.9),
+      inset 0 -2px 3px rgba(0,0,0,0.3),
+      0 2px 6px rgba(0,0,0,0.4);
+    transition: transform 0.15s ease;
+    padding: 0;
+    line-height: 1;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.5);
+  }
+  .bg-nav-btn:hover{
+    transform: scale(1.12);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,1),
+      inset 0 -2px 3px rgba(0,0,0,0.3),
+      0 3px 10px rgba(0,0,0,0.5),
+      0 0 12px rgba(255,255,255,0.3);
+  }
+  .bg-nav-btn:active{
+    transform: scale(0.95);
+  }
+
+</style>
+</head>
+<body>
+
+<!-- MAIN BACKGROUND CYCLE LAYERS -->
+<div id="main-bg-layer-1"></div>
+<div id="main-bg-layer-2"></div>
+
+<div class="page">
+
+  <!-- ============ LEFT: CONFIG PANEL ============ -->
+  <aside class="config-panel glass-panel-config" id="configPanel">
+    <div class="config-bg-layer" id="configBgLayer"></div>
+    <div class="config-bg-layer-2" id="configBgLayer2"></div>
+    <div class="config-tint-layer"></div>
+    <div class="config-content">
+
+      <div class="config-title-wrap">
+        <div class="gear-icon">⚙</div>
+        <h2 class="chrome-title" data-text="Configuration">Configuration</h2>
+      </div>
+
+      <div class="cfg-section">
+        <h3>Retrieval</h3>
+        <div class="cfg-field">
+          <label>Embedding model</label>
+          <select class="cfg-select">
+            <option>sentence-transformers/all-MiniLM-L6-v2</option>
+            <option>BAAI/bge-small-en-v1.5</option>
+            <option>BAAI/bge-base-en-v1.5</option>
+          </select>
+        </div>
+        <div class="cfg-field">
+          <label>Top-K results <span class="val val-red" id="topkVal">8</span></label>
+          <input type="range" min="1" max="15" value="8" id="topkSlider">
+        </div>
+        <div class="cfg-field">
+          <label>Chunk size <span class="val val-gold" id="chunkVal">800</span></label>
+          <input type="range" min="200" max="2000" step="50" value="800" id="chunkSlider">
+        </div>
+        <div class="cfg-field">
+          <label>Temperature <span class="val val-cyan" id="tempVal">0.20</span></label>
+          <input type="range" min="0" max="1" step="0.01" value="0.20" id="tempSlider">
+        </div>
+
+        <div class="model-selector-wrap">
+          <label>LLM Model</label>
+          <div class="model-marquee-btn" id="modelSelectorBtn">
+            <span class="model-marquee-track" id="modelMarqueeTrack">openai/gpt-oss-120b</span>
+          </div>
+          <div class="model-options" id="modelOptions">
+            <div class="opt active" data-model="openai/gpt-oss-120b">openai/gpt-oss-120b <span style="font-size:10px;">⭐ Best</span></div>
+            <div class="opt" data-model="openai/gpt-oss-20b">openai/gpt-oss-20b <span style="font-size:10px;">⚡ Fast</span></div>
+            <div class="opt" data-model="qwen/qwen3.8-27b">qwen/qwen3.8-27b <span style="font-size:10px;">🌍 Multilingual</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section">
+        <h3>Panel Appearance</h3>
+        <div class="cfg-field">
+          <label>Config BG Opacity <span class="val val-gold" id="cfgBgOpVal">0.85</span></label>
+          <input type="range" class="v-config-bg-opacity" min="0" max="1" step="0.01" value="0.85">
+        </div>
+        <div class="cfg-field">
+          <label>Config Tint Opacity <span class="val val-cyan" id="cfgTintOpVal">0.15</span></label>
+          <input type="range" class="v-config-tint-opacity" min="0" max="1" step="0.01" value="0.15">
+        </div>
+        <div class="cfg-field">
+          <label>Config Tint Color</label>
+          <input type="color" class="v-config-tint-color" value="#332150">
+        </div>
+
+        <div class="cfg-field auto-bg-row">
+          <label class="auto-bg-label">Auto BG:</label>
+          <button class="auto-bg-toggle" id="autoBgToggle" aria-pressed="true" title="Toggle automatic background cycling">
+            <span class="auto-bg-knob"></span>
+          </button>
+        </div>
+
+        <div class="cfg-field auto-bg-row">
+          <label class="auto-bg-label">Auto Voice:</label>
+          <button class="auto-bg-toggle" id="autoVoiceToggle" aria-pressed="true" title="Toggle automatic voice reading">
+            <span class="auto-bg-knob"></span>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-nav-controls">
+        <div class="bg-nav-row">
+          <span class="bg-nav-label">Main BG:</span>
+          <button class="bg-nav-btn" id="mainBgPrev" title="Previous main BG">◀</button>
+          <span class="bg-nav-count" id="mainBgCount">1/6</span>
+          <button class="bg-nav-btn" id="mainBgNext" title="Next main BG">▶</button>
+        </div>
+        <div class="bg-nav-row">
+          <span class="bg-nav-label">Panel BG:</span>
+          <button class="bg-nav-btn" id="panelBgPrev" title="Previous panel BG">◀</button>
+          <span class="bg-nav-count" id="panelBgCount">1/6</span>
+          <button class="bg-nav-btn" id="panelBgNext" title="Next panel BG">▶</button>
+        </div>
+      </div>
+
+      <div class="cfg-footer">
+        RAG Assistant · Liquid Metal Edition
+      </div>
+    </div>
+  </aside>
+
+  <!-- ============ RIGHT: MAIN CONTENT ============ -->
+  <main class="main-col">
+    <h1 class="page-title">RAG - Assistant</h1>
+
+    <section class="glass-panel">
+      <div class="card-header">
+        <h2 class="metallic-orange">📄 Upload Documents</h2>
+        <button class="clear-btn" id="clearDocsBtn">Clear Documents</button>
+      </div>
+      <div class="drop-zone" id="dropZone">
+        Drag &amp; drop PDF, DOCX, TXT, CSV here, or click to browse
+        <input type="file" id="docInput" multiple accept=".pdf,.docx,.txt,.csv" style="display:none">
+      </div>
+      <div id="fileChips" class="row"></div>
+      <div class="row">
+        <button class="action" id="uploadBtn" style="background: linear-gradient(90deg, rgba(139,69,19,0.5) 0%, rgba(205,127,50,0.6) 20%, rgba(160,82,45,0.5) 40%, rgba(244,164,96,0.6) 60%, rgba(160,82,45,0.5) 80%, rgba(139,69,19,0.5) 100%), rgba(0,0,0,0.2); border: 1px solid rgba(255,215,0,0.6); color:#ffd700; font-weight:800;">Upload &amp; Index</button>
+        <div id="uploadStatus" style="font-size:13px; color:var(--white-text); align-self:center; margin-left:10px;"></div>
+      </div>
+    </section>
+
+    <section class="glass-panel">
+      <div class="card-header">
+        <h2>💬 Chat History</h2>
+        <button class="clear-btn" id="clearChatBtn">Clear Chat</button>
+      </div>
+      <div id="chatContainer" class="chat-container">
+        <div class="result-item" id="chatWelcome" style="opacity:0.6; text-align:center; font-style:italic;">
+          Ask a question below to start a chat. Your Q&amp;A history will stack here.
+        </div>
+      </div>
+      <div id="askStatus" style="font-size:12px; color:var(--white-text); margin-top:8px; text-align:center;"></div>
+    </section>
+
+    <!-- SUGGESTED QUESTIONS (icon-triggered popup) -->
+    <button class="suggest-toggle" id="suggestToggle" style="display:none;">
+      <span class="icon">💡</span> Try asking
+    </button>
+    <div class="suggest-popup" id="suggestPopup">
+      <div id="suggestChips" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- FIXED INPUT BAR (viewport-level, outside the chat card) -->
+    <div class="chat-input-bar">
+      <input type="text" id="questionInput" placeholder="Ask a question about your documents..." autocomplete="off">
+      <button class="voice-btn" id="voiceBtn" title="Voice input" style="display:none;">🎤</button>
+      <button class="ask-send-btn" id="askBtn" title="Ask">➤</button>
+    </div>
+
+    </main>
+
+</div>
+
+<!-- ============ SHADER PANEL ============ -->
+<div class="shader-panel hidden" id="shaderPanel">
+  <div class="shader-head">
+    <h3>Shader Controls</h3>
+    <button class="shader-close" id="shaderClose">✕</button>
+  </div>
+
+  <div class="sh-field">
+    <label>Blur <span class="val" id="valBlur">0px</span></label>
+    <input type="range" class="v-blur" min="0" max="40" step="1" value="0">
+  </div>
+  <div class="sh-field">
+    <label>Frostiness <span class="val" id="valFrost">0.00</span></label>
+    <input type="range" class="v-frost" min="0" max="1" step="0.01" value="0">
+  </div>
+  <div class="sh-field">
+    <label>Saturation <span class="val" id="valSat">1.00</span></label>
+    <input type="range" class="v-saturation" min="0" max="3" step="0.05" value="1.0">
+  </div>
+  <div class="sh-field">
+    <label>Tint Alpha <span class="val" id="valTintA">0.50</span></label>
+    <div class="sh-color-row">
+      <input type="range" id="tintAlpha" min="0" max="1" step="0.01" value="0.50">
+      <input type="color" id="tintColor" value="#332150">
+    </div>
+  </div>
+  <div class="sh-field">
+    <label>Bevel <span class="val" id="valBevel">6px</span></label>
+    <input type="range" class="v-bevel" min="0" max="20" step="1" value="20">
+  </div>
+  <div class="sh-field">
+    <label>Specular <span class="val" id="valSpec">1.00</span></label>
+    <input type="range" class="v-specular" min="0" max="2" step="0.05" value="1">
+  </div>
+  <div class="sh-field">
+    <label>3D Depth <span class="val" id="valDepth">80px</span></label>
+    <input type="range" class="v-depth" min="0" max="150" step="1" value="150">
+  </div>
+  <div class="sh-field">
+    <label>Radius <span class="val" id="valRadius">40px</span></label>
+    <input type="range" class="v-radius" min="0" max="60" step="1" value="60">
+  </div>
+  <div class="sh-field">
+    <label>Contrast <span class="val" id="valContrast">1.60</span></label>
+    <input type="range" class="v-contrast" min="0.5" max="2" step="0.01" value="1.60">
+  </div>
+  <div class="sh-field">
+    <label>Brightness <span class="val" id="valBrightness">1.40</span></label>
+    <input type="range" class="v-brightness" min="0.5" max="2" step="0.01" value="1.40">
+  </div>
+
+  <hr class="sh-divider">
+
+  <div class="sh-field">
+    <label>Config BG Opacity <span class="val" id="valCfgBg2">0.85</span></label>
+    <input type="range" class="v-config-bg-opacity" min="0" max="1" step="0.01" value="0.85">
+  </div>
+  <div class="sh-field">
+    <label>Config Tint Opacity <span class="val" id="valCfgTint2">0.15</span></label>
+    <input type="range" class="v-config-tint-opacity" min="0" max="1" step="0.01" value="0.15">
+  </div>
+  <div class="sh-field">
+    <label>Config Tint Color</label>
+    <input type="color" class="v-config-tint-color" value="#332150">
+  </div>
+  <hr class="sh-divider">
+
+  <div class="sh-field">
+    <label>Text Color</label>
+    <div class="swatches" id="textSwatches">
+      <div class="swatch active" data-color="#ffffff" style="background:#ffffff"></div>
+      <div class="swatch" data-color="#000000" style="background:#000000"></div>
+      <div class="swatch" data-color="#4da3ff" style="background:#4da3ff"></div>
+      <div class="swatch" data-color="#ff5b5b" style="background:#ff5b5b"></div>
+      <div class="swatch" data-color="#ffd93d" style="background:#ffd93d"></div>
+      <div class="swatch" data-color="#4ade80" style="background:#4ade80"></div>
+      <input type="color" id="customTextColor" value="#ffffff">
+    </div>
+  </div>
+</div>
+
+<!-- ============ SHADER PANEL TOGGLE ============ -->
+<button class="shader-toggle" id="shaderToggle" title="Shader controls">⚙</button>
+
+<script>
+(function(){
+  const root = document.documentElement;
+
+  function bindGroup(className, cssVar, opts){
+    opts = opts || {};
+    const unit = opts.unit || '';
+    const display = opts.display;
+    const els = Array.from(document.querySelectorAll('.' + className));
+    els.forEach(el => {
+      el.addEventListener('input', e => {
+        const val = e.target.value;
+        root.style.setProperty(cssVar, val + unit);
+        els.forEach(other => { if (other !== e.target) other.value = val; });
+        if (display) updateDisplay(display, val, unit, opts.format);
+      });
+    });
+  }
+
+  function updateDisplay(idOrIds, val, unit, format){
+    const ids = Array.isArray(idOrIds) ? idOrIds : [idOrIds];
+    const text = format ? format(val) : (val + unit);
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = text;
+    });
+  }
+
+  const fmt2 = v => parseFloat(v).toFixed(2);
+
+  bindGroup('v-blur', '--blur', { unit:'px', display:'valBlur' });
+  bindGroup('v-frost', '--frost', { display:'valFrost', format: v => parseFloat(v).toFixed(2) });
+  bindGroup('v-saturation', '--saturation', { display:'valSat', format: fmt2 });
+  bindGroup('v-bevel', '--bevel', { unit:'px', display:'valBevel' });
+  bindGroup('v-specular', '--specular', { display:'valSpec', format: fmt2 });
+  bindGroup('v-depth', '--depth', { unit:'px', display:'valDepth' });
+  bindGroup('v-radius', '--radius', { unit:'px', display:'valRadius' });
+  bindGroup('v-contrast', '--contrast', { display:'valContrast', format: fmt2 });
+  bindGroup('v-brightness', '--brightness', { display:'valBrightness', format: fmt2 });
+
+  bindGroup('v-config-bg-opacity', '--config-bg-opacity', {
+    display: ['cfgBgOpVal','valCfgBg2'], format: fmt2
+  });
+  bindGroup('v-config-tint-opacity', '--config-tint-opacity', {
+    display: ['cfgTintOpVal','valCfgTint2'], format: fmt2
+  });
+
+  function hexToRgbTriple(hex){
+    hex = hex.replace('#','');
+    const r = parseInt(hex.substring(0,2),16);
+    const g = parseInt(hex.substring(2,4),16);
+    const b = parseInt(hex.substring(4,6),16);
+    return `${r}, ${g}, ${b}`;
+  }
+
+  document.querySelectorAll('.v-config-tint-color').forEach(el=>{
+    el.addEventListener('input', e=>{
+      const triple = hexToRgbTriple(e.target.value);
+      root.style.setProperty('--config-tint-color', triple);
+      document.querySelectorAll('.v-config-tint-color').forEach(o=>{ if(o!==e.target) o.value = e.target.value; });
+    });
+  });
+
+  const tintAlpha = document.getElementById('tintAlpha');
+  const tintColor = document.getElementById('tintColor');
+  function updateTint(){
+    const triple = hexToRgbTriple(tintColor.value);
+    const a = parseFloat(tintAlpha.value);
+    root.style.setProperty('--tint', `rgba(${triple}, ${a})`);
+    updateDisplay('valTintA', a, '', fmt2);
+  }
+  tintAlpha.addEventListener('input', updateTint);
+  tintColor.addEventListener('input', updateTint);
+
+  const swatches = document.querySelectorAll('#textSwatches .swatch');
+  const customTextColor = document.getElementById('customTextColor');
+  function setTextColor(color){
+    // Apply to AI response text AND general white text elements
+    // (file drop text, file names, card titles — all use --white-text)
+    // Question bubbles use hardcoded #ffffff so they're NOT affected
+    root.style.setProperty('--response-text', color);
+    root.style.setProperty('--white-text', color);
+    swatches.forEach(s => s.classList.toggle('active', s.dataset.color.toLowerCase() === color.toLowerCase()));
+  }
+  swatches.forEach(s=>{ s.addEventListener('click', ()=> setTextColor(s.dataset.color)); });
+  customTextColor.addEventListener('input', e=> setTextColor(e.target.value));
+
+  const shaderPanel = document.getElementById('shaderPanel');
+  const shaderToggle = document.getElementById('shaderToggle');
+  const shaderClose = document.getElementById('shaderClose');
+  shaderToggle.addEventListener('click', (e) => {
+    e.stopPropagation();
+    shaderPanel.classList.remove('hidden');
+  });
+  shaderClose.addEventListener('click', ()=> shaderPanel.classList.add('hidden'));
+
+  // Auto-close on outside click
+  document.addEventListener('click', (e) => {
+    if(shaderPanel.classList.contains('hidden')) return;
+    // Ignore clicks inside panel or on the toggle button
+    if(shaderPanel.contains(e.target)) return;
+    if(shaderToggle.contains(e.target)) return;
+    shaderPanel.classList.add('hidden');
+  });
+  // Stop clicks inside panel from bubbling out (prevents accidental close)
+  shaderPanel.addEventListener('click', (e) => e.stopPropagation());
+
+  function forceDefaults() {
+    root.style.setProperty('--config-label-color', '255, 255, 255');
+    root.style.setProperty('--config-label-light', '255, 255, 255');
+    root.style.setProperty('--config-label-dark', '255, 255, 255');
+    root.style.setProperty('--white-text', '#ffffff');
+    root.style.setProperty('--response-text', '#ffffff');
+  }
+  forceDefaults();
+
+  // (Background upload controls removed — using manual nav buttons instead)
+
+  const topkSlider = document.getElementById('topkSlider');
+  topkSlider.addEventListener('input', e => updateDisplay('topkVal', e.target.value, ''));
+  const chunkSlider = document.getElementById('chunkSlider');
+  chunkSlider.addEventListener('input', e => updateDisplay('chunkVal', e.target.value, ''));
+  const tempSlider = document.getElementById('tempSlider');
+  tempSlider.addEventListener('input', e => updateDisplay('tempVal', e.target.value, '', fmt2));
+
+  const dropZone = document.getElementById('dropZone');
+  const docInput = document.getElementById('docInput');
+  const fileChips = document.getElementById('fileChips');
+  const uploadBtn = document.getElementById('uploadBtn');
+  const uploadStatus = document.getElementById('uploadStatus');
+
+  // [FIX] Removed duplicate dropZone click + docInput change handlers.
+  // Step 6 v3 (loaded later) owns the change event.
+  // The single surviving dropZone click handler lives in the Standalone Fix block.
+
+  uploadBtn.addEventListener('click', async ()=>{
+    if(docInput.files.length === 0){
+      uploadStatus.textContent = 'Please select files first.';
+      return;
+    }
+    uploadStatus.textContent = 'Uploading and indexing...';
+    const formData = new FormData();
+    for(const f of docInput.files) formData.append('files', f);
+    try{
+      const res = await fetch('/upload', {method: 'POST', body: formData});
+      const data = await res.json();
+      if(data.error){ uploadStatus.textContent = 'Error: ' + data.error; }
+      else { uploadStatus.textContent = data.message; }
+    }catch(e){
+      uploadStatus.textContent = 'Request failed: ' + e;
+    }
+  });
+
+  const askBtn = document.getElementById('askBtn');
+  const clearChatBtn = document.getElementById('clearChatBtn');
+  const clearDocsBtn = document.getElementById('clearDocsBtn');
+  const questionInput = document.getElementById('questionInput');
+  const askStatus = document.getElementById('askStatus');
+  const chatContainer = document.getElementById('chatContainer');
+
+  // ---- Chat helper functions ----
+  function getTimestamp(){
+    const d = new Date();
+    let h = d.getHours();
+    const m = d.getMinutes().toString().padStart(2, '0');
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + m + ' ' + ampm;
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function removeWelcome(){
+    const welcome = document.getElementById('chatWelcome');
+    if(welcome && welcome.parentNode) welcome.parentNode.removeChild(welcome);
+  }
+
+  function addQuestionBubble(question){
+    removeWelcome();
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble question';
+    bubble.innerHTML =
+      '<div class="bubble-header">You</div>' +
+      '<div class="bubble-content">' + escapeHtml(question) + '</div>' +
+      '<div class="bubble-time">' + getTimestamp() + '</div>';
+    chatContainer.appendChild(bubble);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
+  function addAnswerBubble(answer, sources){
+    removeWelcome();
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble answer';
+
+    let sourcesHtml = '';
+    if(sources && sources.length > 0){
+      const chips = sources.map((s, i) =>
+        '<span class="source-chip"><span class="source-idx">' + (i+1) + '</span>' + escapeHtml(s) + '</span>'
+      ).join('');
+      sourcesHtml =
+        '<div class="sources-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">' +
+          '▸ View ' + sources.length + ' source' + (sources.length > 1 ? 's' : '') +
+        '</div>' +
+        '<div class="sources-list">' + chips + '</div>';
+    }
+
+    bubble.innerHTML =
+      '<div class="bubble-header">RAG Assistant</div>' +
+      '<div class="bubble-content">' + escapeHtml(answer) + '</div>' +
+      sourcesHtml +
+      '<div class="bubble-time">' + getTimestamp() + '</div>';
+    chatContainer.appendChild(bubble);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+  }
+
+  async function submitQuestion(){
+    const question = questionInput.value.trim();
+    if(!question){ askStatus.textContent = 'Type a question first.'; return; }
+    if(askBtn.disabled) return;
+
+    addQuestionBubble(question);
+    questionInput.value = '';
+    askStatus.textContent = 'Thinking...';
+    askBtn.disabled = true;
+
+    const thinking = document.createElement('div');
+    thinking.className = 'chat-bubble answer';
+    thinking.id = 'chatThinking';
+    thinking.innerHTML = '<div class="bubble-content">🤔 Thinking…</div>';
+    chatContainer.appendChild(thinking);
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    try{
+      const res = await fetch('/ask', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({question})
+      });
+      const data = await res.json();
+      thinking.remove();
+      askBtn.disabled = false;
+
+      if(data.error){
+        askStatus.textContent = '';
+        addAnswerBubble('⚠️ ' + data.error, []);
+        return;
+      }
+      askStatus.textContent = '';
+      addAnswerBubble(data.answer, data.sources || []);
+    }catch(e){
+      thinking.remove();
+      askBtn.disabled = false;
+      askStatus.textContent = '';
+      addAnswerBubble('⚠️ Request failed: ' + e, []);
+    }
+  }
+
+  // (legacy handler removed — streaming script below handles Enter)
+
+  clearChatBtn.addEventListener('click', () => {
+    chatContainer.innerHTML =
+      '<div class="result-item" id="chatWelcome" style="opacity:0.6; text-align:center; font-style:italic;">Chat cleared. Ask a question to start again.</div>';
+    askStatus.textContent = '';
+  });
+
+  clearDocsBtn.addEventListener('click', async () => {
+    try{
+      await fetch('/clear', {method: 'POST'});
+      fileChips.innerHTML = '';
+      docInput.value = '';
+      uploadStatus.textContent = 'Documents cleared.';
+    }catch(e){
+      uploadStatus.textContent = 'Clear failed: ' + e;
+    }
+  });
+
+// (old clearBtn handler removed)
+})();
+</script>
+
+
+
+
+
+<script>
+// ========== MODEL SELECTOR (independent script) ==========
+(function(){
+  function initModelSelector(){
+    const btn = document.getElementById('modelSelectorBtn');
+    const opts = document.getElementById('modelOptions');
+    const track = document.getElementById('modelMarqueeTrack');
+
+    if(!btn || !opts || !track){
+      console.warn('[Model Selector] Elements not found:', {
+        btn: !!btn, opts: !!opts, track: !!track
+      });
+      return;
+    }
+
+    // Expose current model globally so /ask can read it
+    window.currentModel = 'openai/gpt-oss-120b';
+
+    btn.addEventListener('click', function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      opts.classList.toggle('open');
+      console.log('[Model Selector] Toggled:', opts.classList.contains('open'));
+    });
+
+    // Close on outside click
+    document.addEventListener('click', function(e){
+      if(!e.target.closest('.model-selector-wrap')){
+        opts.classList.remove('open');
+      }
+    });
+
+    // Handle option clicks
+    opts.querySelectorAll('.opt').forEach(function(opt){
+      opt.addEventListener('click', function(e){
+        e.preventDefault();
+        e.stopPropagation();
+        const model = opt.dataset.model;
+        window.currentModel = model;
+        track.textContent = model;
+        opts.querySelectorAll('.opt').forEach(function(o){ o.classList.remove('active'); });
+        opt.classList.add('active');
+        opts.classList.remove('open');
+        console.log('[Model Selector] Selected:', model);
+      });
+    });
+
+    console.log('[Model Selector] Initialized.');
+  }
+
+  // Run after DOM is loaded
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initModelSelector);
+  } else {
+    initModelSelector();
+  }
+})();
+</script>
+
+
+<script>
+// ========== PATCH /ask fetch to include settings (independent) ==========
+(function(){
+  function patchFetch(){
+    const originalFetch = window.fetch;
+
+    window.fetch = function(url, opts){
+      // Only patch the /ask POST request
+      if(url === '/ask' && opts && opts.method === 'POST' && opts.body){
+        try{
+          const body = JSON.parse(opts.body);
+
+          // Inject current model
+          if(window.currentModel){
+            body.model = window.currentModel;
+          }
+
+          // Inject Top-K
+          const topkEl = document.getElementById('topkSlider');
+          if(topkEl){ body.top_k = parseInt(topkEl.value); }
+
+          // Inject Temperature
+          const tempEl = document.getElementById('tempSlider');
+          if(tempEl){ body.temperature = parseFloat(tempEl.value); }
+
+          opts = Object.assign({}, opts, {
+            body: JSON.stringify(body),
+            headers: Object.assign({}, opts.headers, {'Content-Type': 'application/json'})
+          });
+
+          console.log('[RAG Settings] Sending:', body);
+        }catch(e){
+          console.warn('[RAG Settings] Failed to patch /ask:', e);
+        }
+      }
+      return originalFetch.call(this, url, opts);
+    };
+
+    console.log('[RAG Settings] Fetch patch installed.');
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', patchFetch);
+  } else {
+    patchFetch();
+  }
+})();
+</script>
+
+
+<script>
+// ========== STREAMING CHAT (independent script) ==========
+(function(){
+  function initStreaming(){
+    const chatContainer = document.getElementById('chatContainer');
+    const askBtn = document.getElementById('askBtn');
+    const questionInput = document.getElementById('questionInput');
+    const askStatus = document.getElementById('askStatus');
+
+    if(!chatContainer || !askBtn || !questionInput){
+      console.warn('[Streaming] Required elements missing.');
+      return;
+    }
+
+    // Detect existing ask handler is broken; replace with streaming version
+    // Clone the ask button to strip old listeners
+    const newAskBtn = askBtn.cloneNode(true);
+    askBtn.parentNode.replaceChild(newAskBtn, askBtn);
+    newAskBtn.id = 'askBtn';
+
+    function getTimestamp(){
+      const d = new Date();
+      let h = d.getHours();
+      const m = d.getMinutes().toString().padStart(2, '0');
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return h + ':' + m + ' ' + ampm;
+    }
+
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+
+    function removeWelcome(){
+      const w = document.getElementById('chatWelcome');
+      if(w && w.parentNode) w.parentNode.removeChild(w);
+    }
+
+    function addQuestionBubble(q){
+      removeWelcome();
+      const b = document.createElement('div');
+      b.className = 'chat-bubble question';
+      b.innerHTML =
+        '<div class="bubble-header">You</div>' +
+        '<div class="bubble-content">' + escapeHtml(q) + '</div>' +
+        '<div class="bubble-time">' + getTimestamp() + '</div>';
+      chatContainer.appendChild(b);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function createAnswerBubble(){
+      removeWelcome();
+      const b = document.createElement('div');
+      b.className = 'chat-bubble answer';
+      b.innerHTML =
+        '<div class="bubble-actions">' +
+          '<button class="bubble-action-btn speak-btn" title="Read aloud">🔊</button>' +
+          '<button class="bubble-action-btn copy-btn" title="Copy answer">📋</button>' +
+          '<button class="bubble-action-btn regen-btn" title="Regenerate answer">🔄</button>' +
+        '</div>' +
+        '<div class="bubble-header">RAG Assistant<span class="confidence-badge" style="display:none;"></span></div>' +
+        '<div class="bubble-content" style="min-height:20px;"></div>' +
+        '<div class="bubble-sources"></div>' +
+        '<div class="bubble-time">' + getTimestamp() + '</div>';
+      chatContainer.appendChild(b);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+
+      // ===== Wire up buttons FOR THIS BUBBLE =====
+      const contentEl = b.querySelector('.bubble-content');
+      const copyBtn = b.querySelector('.copy-btn');
+      const regenBtn = b.querySelector('.regen-btn');
+
+      copyBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const text = contentEl.textContent || '';
+        if(!text.trim()){ return; }
+        try{
+          await navigator.clipboard.writeText(text);
+          copyBtn.textContent = '✅';
+          copyBtn.classList.add('copied');
+          setTimeout(() => {
+            copyBtn.textContent = '📋';
+            copyBtn.classList.remove('copied');
+          }, 1500);
+        }catch(e){
+          console.warn('Clipboard failed:', e);
+          copyBtn.textContent = '❌';
+          setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
+        }
+      });
+
+      regenBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        if(regenBtn.disabled) return;
+        // Find the question for this bubble: it's the previous .chat-bubble.question
+        const prev = b.previousElementSibling;
+        let q = null;
+        while(prev){
+          if(prev.classList && prev.classList.contains('question')){
+            const qContent = prev.querySelector('.bubble-content');
+            q = qContent ? qContent.textContent : null;
+            break;
+          }
+          prev = prev.previousElementSibling;
+        }
+        if(!q){ return; }
+
+        regenBtn.disabled = true;
+        regenBtn.textContent = '⏳';
+        try{
+          // Reset this bubble
+          typewriterQueue = [];
+          typewriterActive = false;
+          typewriterText = '';
+          contentEl.textContent = '';
+          b.querySelector('.bubble-sources').innerHTML = '';
+          typewriterTargetEl = contentEl;
+          await streamAsk(q);
+        }catch(e){
+          console.warn('Regenerate failed:', e);
+          contentEl.textContent = '⚠️ Regenerate failed: ' + e.message;
+        }finally{
+          regenBtn.disabled = false;
+          regenBtn.textContent = '🔄';
+        }
+      });
+
+      // ===== Manual speak button (reads full answer in one pass) =====
+      const speakBtn = b.querySelector('.speak-btn');
+      speakBtn.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if(window.__voiceSpeakingBubble === b){
+          window.__stopSpeaking();
+          return;
+        }
+        window.__stopSpeaking();
+        const text = (contentEl.textContent || '').trim();
+        if(!text) return;
+        window.__voiceSpeakingBubble = b;
+        speakBtn.textContent = '⏹';
+        speakBtn.classList.add('speaking');
+        window.__speakFull(text, function(){
+          speakBtn.textContent = '🔊';
+          speakBtn.classList.remove('speaking');
+          if(window.__voiceSpeakingBubble === b) window.__voiceSpeakingBubble = null;
+        });
+      });
+
+      return b;
+    }
+
+    // ============================================
+    // SMOOTH TYPEWRITER QUEUE
+    // ============================================
+    let typewriterQueue = [];
+    let typewriterActive = false;
+    let typewriterTargetEl = null;
+    let typewriterText = '';
+
+    const TYPE_SPEED_MS = 8;  // ms per character (lower = faster). Try 6-12.
+
+    function typewriterStart(){
+      if(typewriterActive) return;
+      typewriterActive = true;
+      typewriterTick();
+    }
+
+    function typewriterTick(){
+      if(!typewriterTargetEl){
+        typewriterActive = false;
+        return;
+      }
+
+      if(typewriterQueue.length === 0){
+        // Queue empty — wait a bit and check again (stream may still be arriving)
+        setTimeout(() => {
+          if(typewriterQueue.length === 0){
+            typewriterActive = false;
+          } else {
+            typewriterTick();
+          }
+        }, TYPE_SPEED_MS);
+        return;
+      }
+
+      // Take one character from the front of the queue
+      const nextChunk = typewriterQueue.shift();
+      if(nextChunk && nextChunk.length > 0){
+        // Take first char, push rest back if multi-char chunk
+        typewriterText += nextChunk[0];
+        if(nextChunk.length > 1){
+          typewriterQueue.unshift(nextChunk.slice(1));
+        }
+        typewriterTargetEl.textContent = typewriterText;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+      }
+
+      setTimeout(typewriterTick, TYPE_SPEED_MS);
+    }
+
+    async function streamAsk(question){
+      const questionPayload = {
+        question: question,
+        model: window.currentModel || 'openai/gpt-oss-120b',
+        top_k: parseInt(document.getElementById('topkSlider').value),
+        temperature: parseFloat(document.getElementById('tempSlider').value),
+      };
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 90000);
+
+      const response = await fetch('/ask_stream', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(questionPayload),
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+
+      clearTimeout(timeoutId);
+
+      if(!response.ok){
+        throw new Error('Server error: ' + response.status);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const answerBubble = createAnswerBubble();
+      const contentEl = answerBubble.querySelector('.bubble-content');
+      const sourcesEl = answerBubble.querySelector('.bubble-sources');
+      let fullText = '';
+      let retrievalConfidence = null;  // stores {level, percent} from sources event
+
+      // Reset typewriter for this new answer
+      typewriterQueue = [];
+      typewriterActive = false;
+      typewriterTargetEl = contentEl;
+      typewriterText = '';
+
+      while(true){
+        const { done, value } = await reader.read();
+        if(done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse Server-Sent Events
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line
+
+        for(const line of lines){
+          // Skip SSE comments (lines starting with ':')
+          if(line.startsWith(':')) continue;
+          // Skip empty lines
+          if(!line.trim()) continue;
+          // Only process data: lines
+          if(!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if(!jsonStr) continue;
+
+          try{
+            const evt = JSON.parse(jsonStr);
+            if(evt.type === 'sources'){
+              const sources = evt.sources || [];
+              if(sources.length > 0){
+                const chips = sources.map((s, i) => {
+                  // Support BOTH old (string) and new (dict) formats
+                  const srcName = (typeof s === 'string') ? s : (s.source || 'unknown');
+                  const srcPage = (typeof s === 'object' && s.page) ? (' · p.' + s.page) : '';
+                  return '<span class="source-chip" title="' + escapeHtml(srcName) + '">' +
+                    '<span class="source-idx">' + (i+1) + '</span>' +
+                    escapeHtml(srcName) + srcPage +
+                  '</span>';
+                }).join('');
+                sourcesEl.innerHTML =
+                  '<div class="sources-toggle" onclick="this.nextElementSibling.classList.toggle(\'open\')">' +
+                    '▸ View ' + sources.length + ' source' + (sources.length > 1 ? 's' : '') +
+                  '</div>' +
+                  '<div class="sources-list">' + chips + '</div>';
+              }
+
+              // Store retrieval confidence and render badge
+              const conf = evt.confidence;
+              if(conf){
+                retrievalConfidence = conf;  // remember for override check
+                const badge = answerBubble.querySelector('.confidence-badge');
+                if(badge){
+                  const level = (conf.level || 'LOW').toLowerCase();
+                  badge.className = 'confidence-badge ' + level;
+                  badge.innerHTML = '<span class="cb-dot"></span>' + conf.level + ' ' + conf.percent + '%';
+                  badge.style.display = 'inline-flex';
+                  requestAnimationFrame(() => badge.classList.add('visible'));
+                }
+              }
+            }
+            else if(evt.type === 'token'){
+              // Push token to the smooth typewriter queue instead of rendering immediately
+              typewriterQueue.push(evt.token);
+              typewriterStart();
+            }
+            else if(evt.type === 'error'){
+              contentEl.textContent = '⚠️ ' + evt.error;
+            }
+            else if(evt.type === 'done'){
+              // Wait for typewriter queue to drain, then finalize
+              const waitDrain = setInterval(() => {
+                if(typewriterQueue.length === 0 && !typewriterActive){
+                  clearInterval(waitDrain);
+
+                  // ===== Override badge if LLM refused to answer =====
+                  const finalText = (contentEl.textContent || '').toLowerCase();
+                  const refusalPhrases = [
+                    "i don't know",
+                    "i do not know",
+                    "not in the context",
+                    "not present in the context",
+                    "cannot find",
+                    "can't find",
+                    "no information",
+                    "not mentioned",
+                    "not provided",
+                    "isn't in the context",
+                    "is not in the context",
+                    "doesn't contain",
+                    "does not contain"
+                  ];
+                  const isRefusal = refusalPhrases.some(function(p){ return finalText.includes(p); });
+
+                  const badge = answerBubble.querySelector('.confidence-badge');
+                  if(badge){
+                    if(isRefusal){
+                      // Override to LOW regardless of retrieval score
+                      badge.className = 'confidence-badge low visible';
+                      badge.innerHTML = '<span class="cb-dot"></span>LOW 5%';
+                    } else if(retrievalConfidence){
+                      // Keep the retrieval confidence (in case it was cleared)
+                      const lvl = (retrievalConfidence.level || 'LOW').toLowerCase();
+                      badge.className = 'confidence-badge ' + lvl + ' visible';
+                      badge.innerHTML = '<span class="cb-dot"></span>' + retrievalConfidence.level + ' ' + retrievalConfidence.percent + '%';
+                    }
+                  }
+
+                  // ===== AUTO VOICE: read the answer aloud when toggle is ON =====
+                  if(window.__autoVoiceEnabled && window.__speakFull){
+                    const fullAnswerText = (contentEl.textContent || '').trim();
+                    if(fullAnswerText){
+                      // Mark this bubble as currently speaking
+                      window.__voiceSpeakingBubble = answerBubble;
+                      const speakBtn = answerBubble.querySelector('.speak-btn');
+                      if(speakBtn){
+                        speakBtn.textContent = '⏹';
+                        speakBtn.classList.add('speaking');
+                      }
+                      window.__speakFull(fullAnswerText, function(){
+                        if(speakBtn){
+                          speakBtn.textContent = '🔊';
+                          speakBtn.classList.remove('speaking');
+                        }
+                        if(window.__voiceSpeakingBubble === answerBubble){
+                          window.__voiceSpeakingBubble = null;
+                        }
+                      });
+                    }
+                  }
+                }
+              }, 50);
+            }
+          }catch(err){
+            console.warn('[Streaming] Parse error:', err, jsonStr);
+          }
+        }
+      }
+    }
+
+    async function submitQuestion(){
+      const question = questionInput.value.trim();
+      if(!question){ askStatus.textContent = 'Type a question first.'; return; }
+      if(newAskBtn.disabled) return;
+
+      // [AUTO VOICE] Stop any in-flight speech before starting new Q&A
+      if(window.__stopSpeaking) window.__stopSpeaking();
+
+      addQuestionBubble(question);
+      questionInput.value = '';
+      askStatus.textContent = 'Streaming...';
+      newAskBtn.disabled = true;
+
+      try{
+        await streamAsk(question);
+        askStatus.textContent = '';
+      }catch(e){
+        console.error('[Streaming] Error:', e);
+        askStatus.textContent = 'Error: ' + e.message;
+      }finally{
+        newAskBtn.disabled = false;
+        newAskBtn.textContent = '➤';
+      }
+    }
+
+    newAskBtn.addEventListener('click', submitQuestion);
+    questionInput.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter'){ e.preventDefault(); submitQuestion(); }
+    });
+
+    console.log('[Streaming] Chat initialized.');
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initStreaming);
+  } else {
+    initStreaming();
+  }
+})();
+</script>
+
+
+
+
+
+<!-- ============================================================
+     STEP 6 v3 — Incremental auto-index + full remove
+     ============================================================ -->
+<style id="step6-v3-styles">
+  /* File list container */
+  #fileChips.file-list-enhanced{
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    margin-bottom: 12px;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .file-list-item{
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 14px;
+    font-size: 13px;
+    transition: background 0.2s ease;
+    /* [PREVIEW FIX] position:relative + visible overflow so the popover can escape */
+    position: relative;
+    overflow: visible;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .file-list-item:hover{ background: rgba(255,255,255,0.10); }
+  .file-list-item .file-icon{ font-size: 18px; flex-shrink: 0; }
+  .file-list-item .file-info{
+    flex: 1 1 auto;
+    min-width: 0;             /* allows ellipsis on long names */
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .file-list-item .file-name{
+    font-weight: 600;
+    /* [FIX] Follows --white-text (default #ffffff). Swatch-driven. */
+    color: var(--white-text, #ffffff) !important;
+    -webkit-text-fill-color: var(--white-text, #ffffff) !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+  .file-list-item .file-size{
+    font-size: 11px;
+    /* [FIX] Follows --white-text; dimmed with opacity so hue is preserved. */
+    color: var(--white-text, #ffffff) !important;
+    -webkit-text-fill-color: var(--white-text, #ffffff) !important;
+    opacity: 0.55;
+    margin-top: 2px;
+  }
+  .file-list-item .file-remove{
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.4);
+    color: #f87171;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+    transition: background 0.15s ease, transform 0.15s ease;
+  }
+  .file-list-item .file-remove:hover{
+    background: rgba(239,68,68,0.3);
+    transform: scale(1.1);
+  }
+  .file-list-item .file-remove:disabled{
+    opacity: 0.4;
+    cursor: wait;
+  }
+
+  .total-size-indicator{
+    font-size: 11px;
+    color: rgba(255,255,255,0.55);
+    text-align: right;
+    margin-top: 6px;
+    letter-spacing: 0.3px;
+  }
+
+  /* Status display button (NOT clickable) */
+  #uploadBtn.process-status-display{
+    width: 100%;
+    background:
+      linear-gradient(90deg, rgba(139,69,19,0.5) 0%, rgba(205,127,50,0.6) 20%, rgba(160,82,45,0.5) 40%, rgba(244,164,96,0.6) 60%, rgba(160,82,45,0.5) 80%, rgba(139,69,19,0.5) 100%),
+      rgba(0,0,0,0.2) !important;
+    border: 1px solid rgba(255,215,0,0.6);
+    color: #ffd700 !important;
+    border-radius: 999px;
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.5), 0 4px 12px rgba(0,0,0,0.3);
+    cursor: not-allowed;
+    overflow: hidden;
+    position: relative;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 14px;
+    pointer-events: none;
+  }
+  #uploadBtn.process-status-display.done{
+    background:
+      linear-gradient(90deg, rgba(192,192,192,0.3) 0%, rgba(248,248,248,0.5) 20%, rgba(128,128,128,0.3) 40%, rgba(240,240,240,0.5) 60%, rgba(112,112,112,0.3) 80%, rgba(192,192,192,0.4) 100%),
+      rgba(0,0,0,0.2) !important;
+    border-color: rgba(74,222,128,0.7);
+    color: #4ade80 !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.6),
+      inset 0 -1px 0 rgba(0,0,0,0.3),
+      0 4px 12px rgba(0,0,0,0.3),
+      0 0 20px rgba(74, 222, 128, 0.35);
+  }
+  #uploadBtn.process-status-display .marquee-track{
+    display: inline-block;
+    white-space: nowrap;
+    animation: marqueeScroll 14s linear infinite;
+  }
+  @keyframes marqueeScroll{
+    0%{ transform: translateX(-100%); }
+    100%{ transform: translateX(100%); }
+  }
+</style>
+
+<script>
+// ============================================================
+// STEP 6 v3 — Incremental auto-index (safe, non-destructive)
+// ============================================================
+(function(){
+  window.addEventListener('load', function(){
+    const docInput    = document.getElementById('docInput');
+    const fileChips   = document.getElementById('fileChips');
+    const uploadBtn   = document.getElementById('uploadBtn');
+    const uploadStatus= document.getElementById('uploadStatus');
+
+    if(!docInput || !fileChips || !uploadBtn){
+      console.warn('[Step6v3] Required elements not found.');
+      return;
+    }
+
+    const MAX_TOTAL_SIZE = 20 * 1024 * 1024;
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let stagedFiles = [];       // all files in the UI list (File objects)
+    let indexedKeys = new Set(); // "name:size" keys of files already indexed
+
+    function fileKey(f){ return f.name + ':' + f.size; }
+
+    // ============================================================
+    // BUTTON: convert to non-clickable status display
+    // ============================================================
+    uploadBtn.classList.add('process-status-display');
+    uploadBtn.setAttribute('disabled', 'disabled');
+    uploadBtn.innerHTML = '<span class="marquee-track" id="step6Marquee">▶ Awaiting document...</span>';
+    const marquee = document.getElementById('step6Marquee');
+
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    function formatSize(bytes){
+      if(bytes < 1024) return bytes + ' B';
+      if(bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, function(m){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+      });
+    }
+
+    // ============================================================
+    // RENDER FILE LIST
+    // ============================================================
+    function renderFileList(){
+      if(stagedFiles.length === 0){
+        fileChips.classList.remove('file-list-enhanced');
+        fileChips.innerHTML = '';
+        return;
+      }
+
+      fileChips.classList.add('file-list-enhanced');
+      fileChips.innerHTML = '';
+
+      let totalBytes = 0;
+      stagedFiles.forEach(function(f, idx){
+        totalBytes += f.size;
+        const isIndexed = indexedKeys.has(fileKey(f));
+        const item = document.createElement('div');
+        item.className = 'file-list-item';
+        item.innerHTML =
+          '<span class="file-icon">📄</span>' +
+          '<div class="file-info">' +
+            '<span class="file-name" title="' + escapeHtml(f.name) + '">' + escapeHtml(f.name) + '</span>' +
+            '<span class="file-size">' + formatSize(f.size) + (isIndexed ? ' · ✅ indexed' : ' · ⏳ pending') + '</span>' +
+          '</div>' +
+          '<button class="file-remove" data-idx="' + idx + '" title="Remove">&times;</button>';
+        fileChips.appendChild(item);
+
+        // ===== Wire preview: hover expands inline; tap toggles on touch =====
+        function showPreview(){
+          // Popover is anchored above the item, centered — no flip needed.
+          item.classList.add('show-preview');
+        }
+        function hidePreview(){
+          item.classList.remove('show-preview');
+        }
+        item.addEventListener('mouseenter', showPreview);
+        item.addEventListener('mouseleave', hidePreview);
+        // Touch / click toggles (works on mobile)
+        item.addEventListener('click', function(ev){
+          if(ev.target.classList.contains('file-remove')) return;
+          const isOpen = item.classList.contains('show-preview');
+          // Close any other open previews
+          fileChips.querySelectorAll('.file-list-item.show-preview').forEach(function(other){
+            if(other !== item) other.classList.remove('show-preview');
+          });
+          if(!isOpen) showPreview(); else hidePreview();
+        });
+      });
+
+      const total = document.createElement('div');
+      total.className = 'total-size-indicator';
+      total.textContent = 'Total: ' + formatSize(totalBytes) + ' / 20 MB';
+      fileChips.appendChild(total);
+
+      // Wire up remove buttons
+      fileChips.querySelectorAll('.file-remove').forEach(function(btn){
+        btn.addEventListener('click', async function(e){
+          e.stopPropagation();
+          const idx = parseInt(btn.dataset.idx);
+          const file = stagedFiles[idx];
+          if(!file) return;
+          const wasIndexed = indexedKeys.has(fileKey(file));
+
+          if(wasIndexed){
+            // Confirm removal (backend call needed)
+            btn.disabled = true;
+            btn.textContent = '…';
+            try{
+              const res = await fetch('/remove_document', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ filename: file.name })
+              });
+              const data = await res.json();
+              if(!data.success){
+                console.warn('[Step6v3] Remove failed:', data.error);
+                alert('Could not remove from index: ' + (data.error || 'unknown'));
+                btn.disabled = false;
+                btn.textContent = '×';
+                return;
+              }
+            }catch(err){
+              console.error('[Step6v3] Remove error:', err);
+              btn.disabled = false;
+              btn.textContent = '×';
+              return;
+            }
+            indexedKeys.delete(fileKey(file));
+          }
+
+          stagedFiles.splice(idx, 1);
+          renderFileList();
+
+          if(stagedFiles.length === 0){
+            marquee.textContent = '▶ Awaiting document...';
+            uploadBtn.classList.remove('done');
+          }
+        });
+      });
+    }
+
+    // ============================================================
+    // AUTO-PROCESS NEW FILES ONLY
+    // ============================================================
+    let processing = false;
+    let cumulativeFiles = 0;
+    let cumulativeChunks = 0;
+
+    async function autoProcessNew(){
+      if(processing) return;
+
+      const pending = stagedFiles.filter(f => !indexedKeys.has(fileKey(f)));
+      if(pending.length === 0) return;
+
+      processing = true;
+      marquee.textContent = '⏳ Indexing ' + pending.length + ' file(s)...';
+      uploadBtn.classList.remove('done');
+
+      try{
+        const formData = new FormData();
+        pending.forEach(f => formData.append('files', f));
+
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if(data.error){
+          marquee.textContent = '❌ ' + data.error;
+          processing = false;
+          return;
+        }
+
+        pending.forEach(f => indexedKeys.add(fileKey(f)));
+
+        renderFileList();
+
+        // Accumulate totals
+        cumulativeFiles += (data.batch_files || 0);
+        cumulativeChunks = (data.total_chunks || cumulativeChunks + (data.batch_chunks || 0));
+
+        marquee.textContent = '✅ ' + cumulativeChunks + ' chunks · ' + cumulativeFiles + ' files · HYBRID';
+        uploadBtn.classList.add('done');
+      }catch(e){
+        marquee.textContent = '❌ Upload failed: ' + e.message;
+      }finally{
+        processing = false;
+      }
+    }
+
+    // ============================================================
+    // OBSERVE FILE ADDITIONS
+    // ============================================================
+    let autoTimer = null;
+
+    docInput.addEventListener('change', function(){
+      const newFiles = Array.from(docInput.files);
+
+      let currentTotal = stagedFiles.reduce((sum, x) => sum + x.size, 0);
+
+      newFiles.forEach(function(f){
+        if(currentTotal + f.size > MAX_TOTAL_SIZE){
+          alert('Total size limit is 20 MB. File "' + f.name + '" would exceed the limit.');
+          return;
+        }
+        const dup = stagedFiles.find(x => fileKey(x) === fileKey(f));
+        if(dup) return;
+        stagedFiles.push(f);
+        currentTotal += f.size;
+      });
+
+      renderFileList();
+
+      // Trigger auto-process after 400ms of inactivity
+      clearTimeout(autoTimer);
+      autoTimer = setTimeout(autoProcessNew, 400);
+    });
+
+    // ============================================================
+    // RESET ON CLEAR DOCUMENTS
+    // ============================================================
+    const clearDocsBtn = document.getElementById('clearDocsBtn');
+    if(clearDocsBtn){
+      clearDocsBtn.addEventListener('click', function(){
+        // Give the original clear handler a moment to run, then reset UI
+        setTimeout(function(){
+          stagedFiles = [];
+          indexedKeys = new Set();
+          cumulativeFiles = 0;
+          cumulativeChunks = 0;
+          renderFileList();
+          marquee.textContent = '▶ Awaiting document...';
+          uploadBtn.classList.remove('done');
+        }, 100);
+      });
+    }
+
+    console.log('[Step6v3] Incremental auto-index active.');
+  });
+})();
+</script>
+
+
+<script>
+// ============================================================
+// FIXED INPUT BAR — auto-align with chat history card
+// ============================================================
+(function(){
+  function alignInputBar(){
+    const chatCard = document.getElementById('chatContainer')?.closest('.glass-panel');
+    const inputBar = document.querySelector('.chat-input-bar');
+
+    if(!chatCard || !inputBar) return;
+
+    const rect = chatCard.getBoundingClientRect();
+    // Shrink by 20%: 10% off each side
+    const inset = rect.width * 0.10;
+    inputBar.style.left = (rect.left + inset) + 'px';
+    inputBar.style.width = (rect.width - (inset * 2)) + 'px';
+    inputBar.style.right = 'auto';
+  }
+
+  // Run on load + resize + scroll (in case of layout shifts)
+  window.addEventListener('load', alignInputBar);
+  window.addEventListener('resize', alignInputBar);
+  window.addEventListener('scroll', alignInputBar, { passive: true });
+
+  // Also observe DOM changes (e.g., when chat card content changes size)
+  const observer = new MutationObserver(alignInputBar);
+  setTimeout(function(){
+    const chatCard = document.getElementById('chatContainer')?.closest('.glass-panel');
+    if(chatCard){
+      observer.observe(chatCard, { attributes: true, childList: false, subtree: false });
+    }
+  }, 500);
+
+  console.log('[Step7] Input bar alignment active.');
+})();
+</script>
+
+
+<script>
+// ============================================================
+// STEP 6 — Suggested Questions (icon-triggered, auto-hide 3s)
+// ============================================================
+(function(){
+  window.addEventListener('load', function(){
+    const toggleBtn = document.getElementById('suggestToggle');
+    const popup = document.getElementById('suggestPopup');
+    const chipsWrap = document.getElementById('suggestChips');
+    const inputBar = document.querySelector('.chat-input-bar');
+    const questionInput = document.getElementById('questionInput');
+
+    if(!toggleBtn || !popup || !chipsWrap || !inputBar){
+      console.warn('[Step6-Suggest] Elements missing.');
+      return;
+    }
+
+    let hideTimer = null;
+
+    // ---------------------------------------------------------
+    // Align toggle + popup with input bar
+    // ---------------------------------------------------------
+    function alignSuggestElements(){
+      const left = parseFloat(inputBar.style.left) || inputBar.getBoundingClientRect().left;
+      const width = parseFloat(inputBar.style.width) || inputBar.getBoundingClientRect().width;
+      if(!isNaN(left) && !isNaN(width)){
+        toggleBtn.style.left = (left + 4) + 'px';
+        toggleBtn.style.right = 'auto';
+        popup.style.left = (left + 4) + 'px';
+        popup.style.right = 'auto';
+        popup.style.maxWidth = width + 'px';
+      }
+    }
+
+    window.addEventListener('resize', alignSuggestElements);
+    window.addEventListener('scroll', alignSuggestElements, { passive: true });
+    setTimeout(alignSuggestElements, 150);
+    setInterval(alignSuggestElements, 800);
+
+    // ---------------------------------------------------------
+    // Show/hide popup (auto-hide 3s)
+    // ---------------------------------------------------------
+    function showPopup(){
+      popup.classList.add('visible');
+      clearTimeout(hideTimer);
+      hideTimer = setTimeout(() => {
+        popup.classList.remove('visible');
+      }, 3000);
+    }
+
+    function hidePopup(){
+      clearTimeout(hideTimer);
+      popup.classList.remove('visible');
+    }
+
+    toggleBtn.addEventListener('mouseenter', showPopup);
+    toggleBtn.addEventListener('click', showPopup);
+
+    // Keep popup open while hovering over it, reset 3s timer
+    popup.addEventListener('mouseenter', () => {
+      clearTimeout(hideTimer);
+    });
+    popup.addEventListener('mouseleave', () => {
+      hideTimer = setTimeout(() => {
+        popup.classList.remove('visible');
+      }, 3000);
+    });
+
+    // ---------------------------------------------------------
+    // Fetch suggested questions
+    // ---------------------------------------------------------
+    let fetching = false;
+
+    async function fetchSuggestions(){
+      if(fetching) return;
+      fetching = true;
+      try{
+        const res = await fetch('/suggest_questions', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({})
+        });
+        const data = await res.json();
+        if(data.success && data.questions && data.questions.length > 0){
+          renderChips(data.questions);
+          toggleBtn.style.display = 'inline-flex';
+        } else {
+          console.warn('[Step6-Suggest] No questions:', data.error);
+        }
+      }catch(e){
+        console.warn('[Step6-Suggest] Fetch failed:', e);
+      }finally{
+        fetching = false;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // Render chips
+    // ---------------------------------------------------------
+    function renderChips(questions){
+      chipsWrap.innerHTML = '';
+      questions.forEach(function(q){
+        const chip = document.createElement('button');
+        chip.className = 'suggest-chip';
+        chip.innerHTML = '<span class="chip-icon">✨</span>' + escapeHtml(q);
+        chip.title = q;
+        chip.addEventListener('click', function(){
+          // Fill input and trigger Enter (streaming script listens)
+          questionInput.value = q;
+          hidePopup();
+          const evt = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+          questionInput.dispatchEvent(evt);
+        });
+        chipsWrap.appendChild(chip);
+      });
+    }
+
+    function escapeHtml(str){
+      return String(str).replace(/[&<>"']/g, function(m){
+        return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m];
+      });
+    }
+
+    // ---------------------------------------------------------
+    // Trigger fetch after upload succeeds (watch process marquee)
+    // ---------------------------------------------------------
+    const marquee = document.getElementById('step6Marquee');
+    if(marquee){
+      let lastText = marquee.textContent || '';
+      const obs = new MutationObserver(function(){
+        const txt = marquee.textContent || '';
+        if(txt !== lastText){
+          lastText = txt;
+          if(txt.includes('✅') && txt.includes('HYBRID')){
+            setTimeout(fetchSuggestions, 700);
+          }
+        }
+      });
+      obs.observe(marquee, { childList: true, characterData: true, subtree: true });
+    }
+
+    console.log('[Step6-Suggest] Active (icon-triggered).');
+  });
+})();
+</script>
+
+
+<script>
+// ============================================================
+// CONFIG PANEL BG CYCLING (4 images, 30s each, 0.8s crossfade)
+// ============================================================
+(function(){
+  window.addEventListener('load', function(){
+    const layer1 = document.getElementById('configBgLayer');
+    const layer2 = document.getElementById('configBgLayer2');
+
+    if(!layer1 || !layer2) return;
+
+    const PANEL_IMAGES = [
+      '/static/bg/panel-1.jpg',
+      '/static/bg/panel-2.jpg',
+      '/static/bg/panel-3.jpg',
+      '/static/bg/panel-4.jpg',
+      '/static/bg/panel-5.jpg',
+      '/static/bg/panel-6.jpg'
+    ];
+    return;  /* [FIX] Disabled — Standalone Fix owns BG cycling now */
+    const CYCLE_MS = 20000;   // (unused)
+    const FADE_MS  = 800;
+
+    let currentIdx = 0;
+    let useLayer1 = true;     // which layer is currently "on top"
+
+    // Initialize: layer1 shows image 0
+    layer1.style.backgroundImage = "url('" + PANEL_IMAGES[0] + "')";
+    layer1.classList.add('active');
+    layer2.classList.remove('active');
+
+    function advance(){
+      const nextIdx = (currentIdx + 1) % PANEL_IMAGES.length;
+
+      // The layer that's currently hidden becomes the new one
+      const incoming = useLayer1 ? layer2 : layer1;
+      const outgoing = useLayer1 ? layer1 : layer2;
+
+      // Set incoming image
+      incoming.style.backgroundImage = "url('" + PANEL_IMAGES[nextIdx] + "')";
+
+      // Fade in the incoming layer, fade out the outgoing
+      incoming.classList.add('active');
+      outgoing.classList.remove('active');
+
+      // Toggle active layer for next cycle
+      useLayer1 = !useLayer1;
+      currentIdx = nextIdx;
+    }
+
+    setInterval(advance, CYCLE_MS);
+    console.log('[BG Cycle] Config panel cycling every 30s (4 images).');
+  });
+})();
+</script>
+
+
+<script>
+// ============================================================
+// MAIN BG CYCLING (6 images, 15s each, 1.5s cinematic crossfade)
+// ============================================================
+(function(){
+  window.addEventListener('load', function(){
+    const layer1 = document.getElementById('main-bg-layer-1');
+    const layer2 = document.getElementById('main-bg-layer-2');
+
+    if(!layer1 || !layer2){
+      console.warn('[Main BG] Layers not found.');
+      return;
+    }
+
+    const MAIN_IMAGES = [
+      '/static/bg/main-1.jpg',
+      '/static/bg/main-2.jpg',
+      '/static/bg/main-3.jpg',
+      '/static/bg/main-4.jpg',
+      '/static/bg/main-5.jpg',
+      '/static/bg/main-6.jpg'
+    ];
+    return;  /* [FIX] Disabled — Standalone Fix owns BG cycling now */
+    const CYCLE_MS = 23000;   // (unused)
+    const FADE_MS  = 1500;
+
+    let currentIdx = 0;
+    let useLayer1 = true;
+
+    // Initialize: layer1 shows image 0
+    layer1.style.backgroundImage = "url('" + MAIN_IMAGES[0] + "')";
+    layer1.classList.add('active');
+    layer2.classList.remove('active');
+
+    function advance(){
+      const nextIdx = (currentIdx + 1) % MAIN_IMAGES.length;
+      const incoming = useLayer1 ? layer2 : layer1;
+      const outgoing = useLayer1 ? layer1 : layer2;
+
+      incoming.style.backgroundImage = "url('" + MAIN_IMAGES[nextIdx] + "')";
+      incoming.classList.add('active');
+      outgoing.classList.remove('active');
+
+      useLayer1 = !useLayer1;
+      currentIdx = nextIdx;
+    }
+
+    setInterval(advance, CYCLE_MS);
+    console.log('[Main BG] Cycling every 15s (6 images, 1.5s fade).');
+  });
+})();
+</script>
+
+
+
+
+
+<script>
+// ============================================================
+// STANDALONE FIX — BG controls + White text default
+// Runs LAST, independent of other scripts
+// ============================================================
+(function(){
+  function initFix(){
+    console.log('[Standalone Fix] Starting...');
+
+    // ==========================================================
+    // 1. Fix --white-text to white by default (drop text + labels)
+    // ==========================================================
+    const root = document.documentElement;
+    root.style.setProperty('--white-text', '#ffffff');
+    root.style.setProperty('--response-text', '#ffffff');
+
+    // ==========================================================
+    // 2. BG nav buttons — MANUAL CONTROL
+    // ==========================================================
+    const PANEL_IMAGES = [
+      '/static/bg/panel-1.jpg',
+      '/static/bg/panel-2.jpg',
+      '/static/bg/panel-3.jpg',
+      '/static/bg/panel-4.jpg',
+      '/static/bg/panel-5.jpg',
+      '/static/bg/panel-6.jpg'
+    ];
+    const MAIN_IMAGES = [
+      '/static/bg/main-1.jpg',
+      '/static/bg/main-2.jpg',
+      '/static/bg/main-3.jpg',
+      '/static/bg/main-4.jpg',
+      '/static/bg/main-5.jpg',
+      '/static/bg/main-6.jpg'
+    ];
+
+    const panelBgOpacity = () => {
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--config-bg-opacity');
+      return v ? v.trim() : '0.85';
+    };
+
+    // ----------------------------------------------------------
+    // PANEL BG (config panel)
+    // ----------------------------------------------------------
+    const panelL1 = document.getElementById('configBgLayer');
+    const panelL2 = document.getElementById('configBgLayer2');
+    const panelCount = document.getElementById('panelBgCount');
+    let panelIdx = 0;
+    let panelUseL1 = true;
+    let panelTimer = null;
+    const PANEL_CYCLE_MS = 30000;   /* [FIX] 30 seconds */
+
+    // Global flag for auto BG. Default ON.
+    window.__autoBgEnabled = true;
+
+    function panelShow(idx){
+      if(!panelL1 || !panelL2) return;
+      const incoming = panelUseL1 ? panelL2 : panelL1;
+      const outgoing = panelUseL1 ? panelL1 : panelL2;
+      incoming.style.backgroundImage = "url('" + PANEL_IMAGES[idx] + "')";
+      incoming.classList.add('active');
+      outgoing.classList.remove('active');
+      panelUseL1 = !panelUseL1;
+      panelIdx = idx;
+      if(panelCount) panelCount.textContent = (idx + 1) + '/' + PANEL_IMAGES.length;
+    }
+
+    function panelNext(){
+      panelShow((panelIdx + 1) % PANEL_IMAGES.length);
+      if(window.__autoBgEnabled) panelResetTimer();
+    }
+    function panelPrev(){
+      panelShow((panelIdx - 1 + PANEL_IMAGES.length) % PANEL_IMAGES.length);
+      if(window.__autoBgEnabled) panelResetTimer();
+    }
+    function panelResetTimer(){
+      if(panelTimer) clearInterval(panelTimer);
+      panelTimer = setInterval(panelNext, PANEL_CYCLE_MS);
+    }
+
+    // ----------------------------------------------------------
+    // MAIN BG (whole page)
+    // ----------------------------------------------------------
+    const mainL1 = document.getElementById('main-bg-layer-1');
+    const mainL2 = document.getElementById('main-bg-layer-2');
+    const mainCount = document.getElementById('mainBgCount');
+    let mainIdx = 0;
+    let mainUseL1 = true;
+    let mainTimer = null;
+    const MAIN_CYCLE_MS = 35000;   /* [FIX] 35 seconds */
+
+    function mainShow(idx){
+      if(!mainL1 || !mainL2) return;
+      const incoming = mainUseL1 ? mainL2 : mainL1;
+      const outgoing = mainUseL1 ? mainL1 : mainL2;
+      incoming.style.backgroundImage = "url('" + MAIN_IMAGES[idx] + "')";
+      incoming.classList.add('active');
+      outgoing.classList.remove('active');
+      mainUseL1 = !mainUseL1;
+      mainIdx = idx;
+      if(mainCount) mainCount.textContent = (idx + 1) + '/' + MAIN_IMAGES.length;
+    }
+
+    function mainNext(){
+      mainShow((mainIdx + 1) % MAIN_IMAGES.length);
+      if(window.__autoBgEnabled) mainResetTimer();
+    }
+    function mainPrev(){
+      mainShow((mainIdx - 1 + MAIN_IMAGES.length) % MAIN_IMAGES.length);
+      if(window.__autoBgEnabled) mainResetTimer();
+    }
+    function mainResetTimer(){
+      if(mainTimer) clearInterval(mainTimer);
+      mainTimer = setInterval(mainNext, MAIN_CYCLE_MS);
+    }
+
+    // ----------------------------------------------------------
+    // 3. Bind BG nav buttons (direct, no dependency)
+    // ----------------------------------------------------------
+    const mainPrevBtn = document.getElementById('mainBgPrev');
+    const mainNextBtn = document.getElementById('mainBgNext');
+    const panelPrevBtn = document.getElementById('panelBgPrev');
+    const panelNextBtn = document.getElementById('panelBgNext');
+
+    if(mainPrevBtn) mainPrevBtn.addEventListener('click', mainPrev);
+    if(mainNextBtn) mainNextBtn.addEventListener('click', mainNext);
+    if(panelPrevBtn) panelPrevBtn.addEventListener('click', panelPrev);
+    if(panelNextBtn) panelNextBtn.addEventListener('click', panelNext);
+
+    // ----------------------------------------------------------
+    // 4. Init counters + start timers
+    // ----------------------------------------------------------
+    if(panelL1 && panelL2){
+      panelL1.style.backgroundImage = "url('" + PANEL_IMAGES[0] + "')";
+      panelL1.classList.add('active');
+      panelL2.classList.remove('active');
+      if(panelCount) panelCount.textContent = '1/' + PANEL_IMAGES.length;
+      panelResetTimer();   /* [FIX] Auto BG default ON — start now */
+    }
+    if(mainL1 && mainL2){
+      mainL1.style.backgroundImage = "url('" + MAIN_IMAGES[0] + "')";
+      mainL1.classList.add('active');
+      mainL2.classList.remove('active');
+      if(mainCount) mainCount.textContent = '1/' + MAIN_IMAGES.length;
+      mainResetTimer();    /* [FIX] Auto BG default ON — start now */
+    }
+
+    // ----------------------------------------------------------
+    // [FIX] Auto BG toggle wiring
+    // ----------------------------------------------------------
+    const autoToggle = document.getElementById('autoBgToggle');
+    function startAutoBg(){
+      window.__autoBgEnabled = true;
+      panelResetTimer();
+      mainResetTimer();
+    }
+    function stopAutoBg(){
+      window.__autoBgEnabled = false;
+      if(panelTimer) clearInterval(panelTimer);
+      if(mainTimer) clearInterval(mainTimer);
+      panelTimer = null;
+      mainTimer = null;
+    }
+    if(autoToggle){
+      autoToggle.addEventListener('click', function(){
+        const isOn = autoToggle.getAttribute('aria-pressed') === 'true';
+        if(isOn){
+          autoToggle.setAttribute('aria-pressed', 'false');
+          stopAutoBg();
+        } else {
+          autoToggle.setAttribute('aria-pressed', 'true');
+          startAutoBg();
+        }
+      });
+    }
+
+    // ----------------------------------------------------------
+    // 5. Drop zone click handler
+    //    (This is the ONLY surviving handler now — the duplicate
+    //     in the first script block was removed.)
+    // ----------------------------------------------------------
+    const dropZone = document.getElementById('dropZone');
+    const docInput = document.getElementById('docInput');
+    if(dropZone && docInput){
+      dropZone.addEventListener('click', function(e){
+        docInput.click();
+      });
+    }
+
+    console.log('[Standalone Fix] Initialized — BG nav buttons + white text default.');
+  }
+
+  // Run after DOM ready
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initFix);
+  } else {
+    initFix();
+  }
+})();
+</script>
+
+
+<!-- ============ VOICE INPUT (Web Speech API) ============ -->
+<script>
+(function(){
+  function initVoice(){
+    const voiceBtn = document.getElementById('voiceBtn');
+    const questionInput = document.getElementById('questionInput');
+    if(!voiceBtn || !questionInput) return;
+
+    // Feature-detect Web Speech API
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if(!SpeechRecognition){
+      // Firefox / unsupported → keep button hidden, log for debugging
+      console.log('[Voice] Web Speech API not supported in this browser. Mic button hidden.');
+      return;
+    }
+
+    // Show the button now that we know the browser supports it
+    voiceBtn.style.display = 'flex';
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;      // one utterance per click
+    recognition.interimResults = true;   // live transcription as user speaks
+    recognition.lang = 'en-US';          // could be made configurable later
+    recognition.maxAlternatives = 1;
+
+    let isListening = false;
+    let savedInput = '';                 // preserve what user had typed before recording
+
+    function startListening(){
+      if(isListening) return;
+      savedInput = questionInput.value;
+      try{
+        recognition.start();
+      }catch(e){
+        console.warn('[Voice] Failed to start recognition:', e);
+      }
+    }
+
+    function stopListening(){
+      if(!isListening) return;
+      try{
+        recognition.stop();
+      }catch(e){
+        console.warn('[Voice] Failed to stop recognition:', e);
+      }
+    }
+
+    voiceBtn.addEventListener('click', function(e){
+      e.preventDefault();
+      if(isListening) stopListening();
+      else startListening();
+    });
+
+    recognition.onstart = function(){
+      isListening = true;
+      voiceBtn.classList.add('listening');
+      voiceBtn.title = 'Listening… click to stop';
+    };
+
+    recognition.onend = function(){
+      isListening = false;
+      voiceBtn.classList.remove('listening');
+      voiceBtn.title = 'Voice input';
+    };
+
+    recognition.onerror = function(ev){
+      console.warn('[Voice] Error:', ev.error);
+      isListening = false;
+      voiceBtn.classList.remove('listening');
+      voiceBtn.title = 'Voice input';
+      // Silent fail — no alert to avoid annoying the user
+    };
+
+    recognition.onresult = function(ev){
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      for(let i = ev.resultIndex; i < ev.results.length; i++){
+        const transcript = ev.results[i][0].transcript;
+        if(ev.results[i].isFinal){
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Live preview: show what's being heard right now
+      const displayText = (savedInput ? savedInput + ' ' : '') +
+                          (finalTranscript || interimTranscript);
+      questionInput.value = displayText;
+    };
+
+    console.log('[Voice] Web Speech API ready. Mic button visible.');
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initVoice);
+  } else {
+    initVoice();
+  }
+})();
+</script>
+
+
+<!-- ============ AUTO VOICE (Web Speech Synthesis TTS) ============ -->
+<script>
+(function(){
+  // ============================================================
+  // 1. State + helpers
+  // ============================================================
+  window.__autoVoiceEnabled = true;      // toggle default ON
+  window.__voiceSpeakingBubble = null;   // which bubble is currently being read (auto mode)
+  let currentUtterance = null;           // active SpeechSynthesisUtterance
+
+  // Strip markdown artifacts so we don't read "asterisk asterisk"
+  function stripMarkdown(text){
+    return String(text)
+      .replace(/\*\*(.+?)\*\*/g, '$1')     // **bold** → bold
+      .replace(/\*(.+?)\*/g, '$1')           // *italic* → italic
+      .replace(/`{1,3}([^`]+?)`{1,3}/g, '$1') // `code` → code
+      .replace(/^#{1,6}\s+/gm, '')            // # Heading → Heading
+      .replace(/^\s*[-*+]\s+/gm, '')          // - list → list
+      .replace(/\[(.+?)\]\(.+?\)/g, '$1')   // [link](url) → link
+      .replace(/\n{2,}/g, '. ')               // paragraph break → pause
+      .replace(/\s+/g, ' ')                   // collapse whitespace
+      .trim();
+  }
+
+  // Pick best female English voice available
+  function pickBestFemaleVoice(){
+    if(!window.speechSynthesis) return null;
+    const voices = window.speechSynthesis.getVoices();
+    if(!voices || voices.length === 0) return null;
+
+    const priorityNames = [
+      'Google UK English Female',
+      'Google US English',
+      'Samantha',
+      'Karen',
+      'Moira',
+      'Tessa',
+      'Fiona',
+      'Victoria',
+      'Allison',
+      'Ava',
+      'Zira'
+    ];
+
+    // 1. Exact name match from priority list
+    for(const name of priorityNames){
+      const v = voices.find(function(v){
+        return v.name === name && v.lang && v.lang.startsWith('en');
+      });
+      if(v) return v;
+    }
+    // 2. Any English voice whose name contains "female"
+    const anyFemale = voices.find(function(v){
+      return v.lang && v.lang.startsWith('en') && /female/i.test(v.name);
+    });
+    if(anyFemale) return anyFemale;
+    // 3. First English voice
+    const anyEnglish = voices.find(function(v){
+      return v.lang && v.lang.startsWith('en');
+    });
+    return anyEnglish || voices[0] || null;
+  }
+
+  // ============================================================
+  // 2. Speaking engine
+  // ============================================================
+
+  // Called by both auto mode and manual replay
+  window.__speakFull = function(text, onEnd){
+    if(!window.speechSynthesis || !text) return;
+    const clean = stripMarkdown(text);
+    if(!clean) return;
+    const u = new SpeechSynthesisUtterance(clean);
+    const voice = pickBestFemaleVoice();
+    if(voice) u.voice = voice;
+    u.rate = 1.0;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+    u.onend = function(){ if(onEnd) onEnd(); };
+    u.onerror = function(){ if(onEnd) onEnd(); };
+    currentUtterance = u;
+    window.speechSynthesis.cancel();  // stop any prior speech
+    window.speechSynthesis.speak(u);
+  };
+
+  window.__stopSpeaking = function(){
+    if(!window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    currentUtterance = null;
+    // Clear any speaking button visuals
+    document.querySelectorAll('.bubble-action-btn.speaking').forEach(function(btn){
+      btn.textContent = '🔊';
+      btn.classList.remove('speaking');
+    });
+    window.__voiceSpeakingBubble = null;
+  };
+
+  // ============================================================
+  // 3. Auto Voice toggle wiring
+  // ============================================================
+  function initToggle(){
+    const toggle = document.getElementById('autoVoiceToggle');
+    if(!toggle) return;
+    toggle.addEventListener('click', function(){
+      const isOn = toggle.getAttribute('aria-pressed') === 'true';
+      if(isOn){
+        toggle.setAttribute('aria-pressed', 'false');
+        window.__autoVoiceEnabled = false;
+        window.__stopSpeaking();
+      } else {
+        toggle.setAttribute('aria-pressed', 'true');
+        window.__autoVoiceEnabled = true;
+      }
+    });
+  }
+
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', initToggle);
+  } else {
+    initToggle();
+  }
+
+  // Voice list can load async; warm it up
+  if(window.speechSynthesis){
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.onvoiceschanged = function(){
+      window.speechSynthesis.getVoices();
+    };
+  }
+
+  console.log('[Auto Voice] Ready. Default: ON.');
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+
+# Runtime state (regenerated on upload)
+uploaded_docs/
+faiss_index/
+bm25_index.pkl
+
+# Local backups
+backups/
+*.backup.py
+app_back_up.py
+
+# IDE
+.vscode/
+.idea/
